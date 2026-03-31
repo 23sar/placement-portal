@@ -1,0 +1,199 @@
+/* Base */
+body {
+  font-family: 'Segoe UI', sans-serif;
+  margin: 0;
+  background: linear-gradient(to right, #667eea, #764ba2);
+  color: #333;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+/* Headings */
+h2 {
+  text-align: center;
+  margin-top: 30px;
+}
+
+/* Navbar */
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: white;
+  padding: 15px 20px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+.navbar h3 {
+  font-weight: 600;
+  font-size: 18px;
+}
+
+/* Theme Button */
+.theme-btn {
+  background: #444;
+  color: white;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  width: auto;
+  margin-right: 10px;
+}
+
+/* Logout Button */
+.logout-btn {
+  background: red;
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 8px;
+  cursor: pointer;
+  width: auto;
+}
+
+/* Jobs Container */
+#jobs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+/* Job Cards */
+#jobs div {
+  background: white;
+  padding: 20px;
+  margin: 15px;
+  width: 280px;
+  border-radius: 15px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+  transition: transform 0.2s;
+  animation: fadeIn 0.5s ease;
+}
+
+/* Hover Effect */
+#jobs div:hover {
+  transform: translateY(-5px) scale(1.03);
+}
+
+/* Buttons */
+button {
+  background: linear-gradient(45deg, #007bff, #00c6ff);
+  color: white;
+  border: none;
+  padding: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+button:active {
+  transform: scale(0.95);
+}
+
+/* Auth Container */
+.auth-container {
+  background: white;
+  width: 300px;
+  margin: 100px auto;
+  padding: 25px;
+  border-radius: 15px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+  text-align: center;
+}
+
+.auth-container h2 {
+  color: #333;
+}
+
+/* Inputs */
+.auth-container input,
+.auth-container select {
+  width: 95%;
+  padding: 10px;
+  margin: 10px 0;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+}
+
+.auth-container button {
+  width: 95%;
+}
+
+.auth-container a {
+  color: #007bff;
+  text-decoration: none;
+}
+
+/* Input Group (with icons) */
+.input-group {
+  display: flex;
+  align-items: center;
+  background: #f1f1f1;
+  border-radius: 8px;
+  padding: 8px;
+  margin: 10px 0;
+}
+
+.input-group i {
+  margin-right: 10px;
+  color: #555;
+}
+
+.input-group input,
+.input-group select {
+  border: none;
+  outline: none;
+  background: transparent;
+  width: 100%;
+}
+
+/* Focus Effect */
+.input-group:focus-within {
+  border: 2px solid #667eea;
+  background: #fff;
+}
+
+/* Animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Dark Mode */
+.dark {
+  background: #1e1e2f;
+  color: white;
+}
+
+.dark .navbar {
+  background: #2c2c3e;
+}
+
+.dark #jobs div {
+  background: #2c2c3e;
+  color: white;
+}
+
+.dark .auth-container {
+  background: #2c2c3e;
+  color: white;
+}
+
+.dark .input-group {
+  background: #444;
+}
+
+.dark .input-group i {
+  color: #ccc;
+}
