@@ -2,24 +2,28 @@ const express = require('express');
 const router = express.Router();
 
 const { verifyToken, checkRole } = require('../middleware/authMiddleware');
-const { createJob, getJobs } = require('../controllers/jobController');
+const { createJob, getJobs, getJobById, deleteJob } = require('../controllers/jobController');
 const { applyJob, getApplicants } = require('../controllers/applicationController');
 
-// company only
-router.post('/create', verifyToken, checkRole('company'), createJob);
+// IMPORTANT: Specific string-segment routes MUST come before parameterized /:id routes
+// to prevent /applicants/:jobId being swallowed by /:id
 
-// get all jobs
+// List all jobs (requires auth)
 router.get('/', verifyToken, getJobs);
 
-// student apply (REAL NOW)
-router.post('/apply', verifyToken, checkRole('student'), applyJob);
-
-// company sees applicants
+// Company only — view applicants (must be before /:id)
 router.get('/applicants/:jobId', verifyToken, checkRole('company'), getApplicants);
 
-// test
-router.get('/protected', verifyToken, (req, res) => {
-  res.send(`Hello ${req.user.role}`);
-});
+// Company only — create a job
+router.post('/create', verifyToken, checkRole('company'), createJob);
+
+// Student only — apply for a job
+router.post('/apply', verifyToken, checkRole('student'), applyJob);
+
+// Get a single job by ID (after all specific paths)
+router.get('/:id', verifyToken, getJobById);
+
+// Company only — delete own job
+router.delete('/:id', verifyToken, checkRole('company'), deleteJob);
 
 module.exports = router;
