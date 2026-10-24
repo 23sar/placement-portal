@@ -248,4 +248,3 @@ This project was built to gain hands-on experience with real-world system design
 - Email notifications
 - Advanced filtering and search
 - Deployment and cloud integration
->>>>>>> 7e8efb19d98dfb7316407ea8acf8bae0c74e0313
