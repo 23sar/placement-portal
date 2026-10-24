@@ -15,3 +15,8 @@ Thumbs.db
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Audit & Test Reports
+FUNCTIONAL_TEST_REPORT.md
+PROJECT_AUDIT_REPORT.md
+*REPORT.md
