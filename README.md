@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # 🎓 Campus Placement Portal
 
 A production-ready, full-stack college recruitment management system built to connect students with hiring companies. The platform streamlines job postings, student applications, and candidate evaluation through an intuitive, role-based web interface.
