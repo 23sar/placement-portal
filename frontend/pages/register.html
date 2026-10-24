@@ -1,60 +1,9 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Register — Campus Placement Portal</title>
-  <meta name="description" content="Create a student or company account.">
-  <link rel="stylesheet" href="../assets/css/style.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body>
-
-<script>window.LOGIN_URL = 'login.html';</script>
-
-<button id="theme-btn" onclick="toggleTheme()" class="theme-btn" title="Toggle dark mode">🌙</button>
-
-<div class="auth-container">
-  <h2><i class="fa-solid fa-user-plus"></i> Register</h2>
-
-  <p id="error-msg" class="text-red-500 text-sm min-h-[20px] mb-1"></p>
-
-  <form id="register-form" novalidate>
-    <div class="input-group">
-      <i class="fa-solid fa-user"></i>
-      <input type="text" id="name" placeholder="Full Name" autocomplete="name" required>
-    </div>
-    <div class="input-group">
-      <i class="fa-solid fa-envelope"></i>
-      <input type="email" id="email" placeholder="Email" autocomplete="email" required>
-    </div>
-    <div class="input-group">
-      <i class="fa-solid fa-lock"></i>
-      <input type="password" id="password" placeholder="Password (min 6 chars)"
-             autocomplete="new-password" required minlength="6">
-    </div>
-    <div class="input-group">
-      <i class="fa-solid fa-users"></i>
-      <select id="role" required>
-        <option value="student">Student</option>
-        <option value="company">Company / Recruiter</option>
-      </select>
-    </div>
-
-    <button type="submit" id="register-btn">
-      <i class="fa-solid fa-user-plus"></i> Create Account
-    </button>
-  </form>
-
-  <p style="margin-top:12px; font-size:14px;">
-    Already have an account? <a href="login.html">Login</a>
-  </p>
-</div>
-
-<script src="../assets/js/core/config.js"></script>
-<script src="../assets/js/core/api.js"></script>
-<script src="../assets/js/core/theme.js"></script>
-<script src="../assets/js/pages/register.js"></script>
-</body>
-</html>
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Create account</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../assets/css/style.css"><script src="../assets/js/core/core.js"></script></head>
+<body><div class="auth"><aside><a class="brand" href="../index.html">Placement<i>Portal</i></a><div><h1>Your next role starts here.</h1><p>One place for campus openings, applications and decisions.</p></div><span></span></aside><main><form id="register"><h2>Create your account</h2><p class="muted">It takes under a minute.</p>
+<label>I am a…</label><div class="roles"><label><input type="radio" name="role" value="student" checked><span>Student</span></label><label><input type="radio" name="role" value="company"><span>Company</span></label></div>
+<label for="name">Full name or company name</label><input id="name" name="name" required autocomplete="name">
+<label for="email">Email</label><input id="email" name="email" type="email" required autocomplete="email">
+<label for="password">Password (6+ characters)</label><input id="password" name="password" type="password" minlength="6" required autocomplete="new-password">
+<p class="err" id="err" role="alert"></p><button class="btn" type="submit">Create account</button>
+<p class="alt muted">Already registered? <a href="login.html">Sign in</a></p></form></main></div>
+<script src="../assets/js/pages/auth.js"></script></body></html>

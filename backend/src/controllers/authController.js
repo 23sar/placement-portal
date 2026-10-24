@@ -23,7 +23,7 @@ exports.register = async (req, res) => {
   try {
     const hashed = await bcrypt.hash(password, 10);
     db.query(
-      'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
+      'INSERT INTO users (name, email, password, role, is_active) VALUES (?, ?, ?, ?, TRUE)',
       [name, email, hashed, role],
       (err) => {
         if (err) {
@@ -59,6 +59,12 @@ exports.login = (req, res) => {
     }
 
     const user = rows[0];
+
+    // Check account active status before or after password verification
+    if (!user.is_active) {
+      return res.status(403).json({ error: 'Account has been deactivated. Please contact the placement cell.' });
+    }
+
     try {
       const isMatch = await bcrypt.compare(password, user.password);
       if (!isMatch) return res.status(401).json({ error: 'Invalid email or password.' });
@@ -72,7 +78,13 @@ exports.login = (req, res) => {
       return res.status(200).json({
         message: 'Login successful.',
         token,
-        user: { id: user.id, name: user.name, email: user.email, role: user.role },
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          is_active: Boolean(user.is_active),
+        },
       });
     } catch (bcryptErr) {
       console.error('[login] bcrypt error:', bcryptErr.message);

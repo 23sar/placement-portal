@@ -1,62 +1,7 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login — Campus Placement Portal</title>
-  <meta name="description" content="Log in to your placement portal account.">
-  <link rel="stylesheet" href="../assets/css/style.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body>
-
-<!-- Each page sets LOGIN_URL so core scripts know where to redirect on 401 -->
-<script>window.LOGIN_URL = 'login.html';</script>
-
-<button id="theme-btn" onclick="toggleTheme()" class="theme-btn" title="Toggle dark mode">🌙</button>
-
-<div class="auth-container">
-  <h2><i class="fa-solid fa-right-to-bracket"></i> Login</h2>
-
-  <!-- Success banner shown after registration redirect -->
-  <div id="registered-banner"
-       class="hidden bg-green-100 text-green-800 text-sm rounded px-3 py-2 mb-3">
-    ✅ Account created! Please log in.
-  </div>
-
-  <!-- Error message -->
-  <p id="error-msg" class="text-red-500 text-sm min-h-[20px] mb-1"></p>
-
-  <form id="login-form" novalidate>
-    <div class="input-group">
-      <i class="fa-solid fa-envelope"></i>
-      <input type="email" id="email" placeholder="Email" autocomplete="email" required>
-    </div>
-    <div class="input-group">
-      <i class="fa-solid fa-lock"></i>
-      <input type="password" id="password" placeholder="Password" autocomplete="current-password" required>
-    </div>
-
-    <button type="submit" id="login-btn">
-      <i class="fa-solid fa-arrow-right-to-bracket"></i> Login
-    </button>
-  </form>
-
-  <p style="margin-top:12px; font-size:14px;">
-    Don't have an account? <a href="register.html">Register</a>
-  </p>
-</div>
-
-<script src="../assets/js/core/config.js"></script>
-<script src="../assets/js/core/api.js"></script>
-<script src="../assets/js/core/theme.js"></script>
-<script src="../assets/js/pages/login.js"></script>
-<script>
-  // Show banner if redirected from register page
-  if (new URLSearchParams(window.location.search).get('registered')) {
-    document.getElementById('registered-banner').classList.remove('hidden');
-  }
-</script>
-</body>
-</html>
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="../assets/css/style.css"><script src="../assets/js/core/core.js"></script></head>
+<body><div class="auth"><aside><a class="brand" href="../index.html">Placement<i>Portal</i></a><div><h1>Your next role starts here.</h1><p>One place for campus openings, applications and decisions.</p></div><span></span></aside><main><form id="login"><h2>Welcome back</h2><p class="muted">Sign in to continue.</p>
+<label for="email">Email</label><input id="email" name="email" type="email" required autocomplete="email">
+<label for="password">Password</label><input id="password" name="password" type="password" required autocomplete="current-password">
+<p class="err" id="err" role="alert"></p><button class="btn" type="submit">Sign in</button>
+<p class="alt muted">New here? <a href="register.html">Create an account</a></p></form></main></div>
+<script src="../assets/js/pages/auth.js"></script></body></html>
