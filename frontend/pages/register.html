@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Register — Campus Placement Portal</title>
+  <meta name="description" content="Create a student or company account.">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+
+<script>window.LOGIN_URL = 'login.html';</script>
+
+<button id="theme-btn" onclick="toggleTheme()" class="theme-btn" title="Toggle dark mode">🌙</button>
+
+<div class="auth-container">
+  <h2><i class="fa-solid fa-user-plus"></i> Register</h2>
+
+  <p id="error-msg" class="text-red-500 text-sm min-h-[20px] mb-1"></p>
+
+  <form id="register-form" novalidate>
+    <div class="input-group">
+      <i class="fa-solid fa-user"></i>
+      <input type="text" id="name" placeholder="Full Name" autocomplete="name" required>
+    </div>
+    <div class="input-group">
+      <i class="fa-solid fa-envelope"></i>
+      <input type="email" id="email" placeholder="Email" autocomplete="email" required>
+    </div>
+    <div class="input-group">
+      <i class="fa-solid fa-lock"></i>
+      <input type="password" id="password" placeholder="Password (min 6 chars)"
+             autocomplete="new-password" required minlength="6">
+    </div>
+    <div class="input-group">
+      <i class="fa-solid fa-users"></i>
+      <select id="role" required>
+        <option value="student">Student</option>
+        <option value="company">Company / Recruiter</option>
+      </select>
+    </div>
+
+    <button type="submit" id="register-btn">
+      <i class="fa-solid fa-user-plus"></i> Create Account
+    </button>
+  </form>
+
+  <p style="margin-top:12px; font-size:14px;">
+    Already have an account? <a href="login.html">Login</a>
+  </p>
+</div>
+
+<script src="../assets/js/core/config.js"></script>
+<script src="../assets/js/core/api.js"></script>
+<script src="../assets/js/core/theme.js"></script>
+<script src="../assets/js/pages/register.js"></script>
+</body>
+</html>

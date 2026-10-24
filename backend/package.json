@@ -1,0 +1,27 @@
+{
+  "name": "placement-portal-backend",
+  "version": "1.0.0",
+  "description": "Campus Placement Portal — Express/MySQL API",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "echo \"No tests yet — see FUNCTIONAL_TEST_REPORT.md\" && exit 1"
+  },
+  "keywords": ["placement", "portal", "express", "mysql"],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.1.1",
+    "mysql2": "^3.20.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}

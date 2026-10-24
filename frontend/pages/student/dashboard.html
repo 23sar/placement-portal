@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — Placement Portal</title>
+  <meta name="description" content="Browse available jobs and track your placement applications.">
+  <link rel="stylesheet" href="../../assets/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 transition-colors">
+
+<script>window.LOGIN_URL = '../login.html';</script>
+
+<div class="flex h-screen overflow-hidden">
+
+  <!-- ── Sidebar ────────────────────────────────────────────── -->
+  <aside class="w-64 bg-gray-900 text-white p-5 flex flex-col flex-shrink-0">
+    <h2 class="text-xl font-bold mb-8">🎓 Placement Portal</h2>
+    <nav>
+      <ul class="space-y-1">
+        <li><a href="dashboard.html"
+               class="flex items-center gap-3 px-3 py-2 rounded bg-blue-700 font-semibold">
+          <i class="fa-solid fa-house w-4"></i> Dashboard
+        </a></li>
+        <li><a href="my-applications.html"
+               class="flex items-center gap-3 px-3 py-2 rounded hover:bg-gray-700 transition">
+          <i class="fa-solid fa-file-lines w-4"></i> My Applications
+        </a></li>
+      </ul>
+    </nav>
+    <div class="mt-auto pt-6 border-t border-gray-700 text-sm">
+      <p class="text-gray-400">Logged in as</p>
+      <p id="user-name" class="font-semibold text-white">—</p>
+      <p id="user-role" class="text-xs text-blue-400 capitalize">—</p>
+    </div>
+  </aside>
+
+  <!-- ── Main ───────────────────────────────────────────────── -->
+  <div class="flex-1 overflow-y-auto p-6">
+
+    <!-- Topbar -->
+    <div class="flex justify-between items-center mb-6">
+      <h1 class="text-2xl font-semibold text-gray-800 dark:text-white">Dashboard</h1>
+      <div class="flex gap-3">
+        <button id="theme-btn" onclick="toggleTheme()"
+                class="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 px-3 py-2 rounded hover:opacity-80 transition">🌙</button>
+        <button onclick="logout()"
+                class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded transition text-sm">
+          <i class="fa-solid fa-right-from-bracket mr-1"></i>Logout
+        </button>
+      </div>
+    </div>
+
+    <!-- Stats cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-5">
+        <p class="text-sm text-gray-500 dark:text-gray-400">Total Applications</p>
+        <p id="stat-total" class="text-3xl font-bold text-gray-800 dark:text-white mt-1">—</p>
+      </div>
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-5">
+        <p class="text-sm text-gray-500 dark:text-gray-400">Shortlisted</p>
+        <p id="stat-shortlisted" class="text-3xl font-bold text-green-600 mt-1">—</p>
+      </div>
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-5">
+        <p class="text-sm text-gray-500 dark:text-gray-400">Rejected</p>
+        <p id="stat-rejected" class="text-3xl font-bold text-red-500 mt-1">—</p>
+      </div>
+    </div>
+
+    <!-- Job listings -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold text-gray-800 dark:text-white">
+          <i class="fa-solid fa-briefcase mr-2 text-blue-500"></i>Available Jobs
+        </h2>
+        <input type="text" id="job-search" placeholder="Search jobs…" oninput="filterJobs()"
+               class="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white rounded px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-44">
+      </div>
+      <div id="jobs" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+    </div>
+
+  </div>
+</div>
+
+<script src="../../assets/js/core/config.js"></script>
+<script src="../../assets/js/core/api.js"></script>
+<script src="../../assets/js/core/auth.js"></script>
+<script src="../../assets/js/core/theme.js"></script>
+<script src="../../assets/js/pages/student-dashboard.js"></script>
+</body>
+</html>
