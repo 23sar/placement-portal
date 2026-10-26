@@ -1,7 +1,7 @@
 {
   "name": "placement-portal-backend",
   "version": "1.0.0",
-  "description": "Campus Placement Portal — Express/MySQL API",
+  "description": "Campus Placement Portal \u2014 Express/MySQL API",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
@@ -10,9 +10,15 @@
     "test:step3": "node tests/step3_backend.test.js",
     "test:step5": "node tests/step5_integration.test.js",
     "test:step6": "node tests/step6_backend.test.js",
-    "test:step7": "node tests/step7_backend.test.js"
+    "test:step7": "node tests/step7_backend.test.js",
+    "test:step8-profile": "node tests/step8_profile_api.test.js"
   },
-  "keywords": ["placement", "portal", "express", "mysql"],
+  "keywords": [
+    "placement",
+    "portal",
+    "express",
+    "mysql"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",

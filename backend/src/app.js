@@ -12,6 +12,7 @@ const errorHandler = require('./middleware/errorHandler');
 const authRoutes        = require('./routes/auth');
 const jobRoutes         = require('./routes/jobs');
 const applicationRoutes = require('./routes/applications');
+const profileRoutes     = require('./routes/profile');
 
 const app = express();
 
@@ -36,6 +37,7 @@ app.use(express.json());
 app.use('/api/auth',         authRoutes);
 app.use('/api/jobs',         jobRoutes);
 app.use('/api/applications', applicationRoutes);
+app.use('/api/profile',      profileRoutes);
 
 // Health-check
 app.get('/', (_req, res) => res.json({ status: 'ok', message: 'Placement Portal API' }));
