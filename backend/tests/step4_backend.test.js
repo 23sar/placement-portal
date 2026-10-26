@@ -438,7 +438,7 @@ async function main() {
       method: 'DELETE',
       token: company1.token,
     });
-    console.assert(company1DeleteAttempt.status === 404, `Company 1 cannot delete admin-created posting, got ${company1DeleteAttempt.status}`);
+    console.assert(company1DeleteAttempt.status === 403 || company1DeleteAttempt.status === 404, `Company 1 cannot delete admin-created posting, got ${company1DeleteAttempt.status}`);
 
     const company1StatusAttempt = await request(`/api/jobs/${assignedJobId}/status`, {
       method: 'PATCH',

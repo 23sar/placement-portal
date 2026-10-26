@@ -10,6 +10,7 @@ const {
   reviewJobApproval,
   updateJobStatus,
   getActiveCompanies,
+  updateJob,
 } = require('../controllers/jobController');
 const { applyJob, getApplicants } = require('../controllers/applicationController');
 
@@ -26,6 +27,7 @@ router.post('/create',           verifyToken, checkRole('company', 'admin'),    
 router.post('/apply',            verifyToken, checkRole('student'),             applyJob);
 router.patch('/:id/approval',    verifyToken, checkRole('admin'),               reviewJobApproval);
 router.patch('/:id/status',      verifyToken, checkRole('company', 'admin'),    updateJobStatus);
+router.patch('/:id',             verifyToken, checkRole('company', 'admin'),    updateJob);
 router.get('/:id',               verifyToken,                                   getJobById);
 router.delete('/:id',            verifyToken, checkRole('company', 'admin'),    deleteJob);
 

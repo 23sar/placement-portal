@@ -8,7 +8,9 @@
     "dev": "nodemon src/server.js",
     "test": "node tests/step4_backend.test.js",
     "test:step3": "node tests/step3_backend.test.js",
-    "test:step5": "node tests/step5_integration.test.js"
+    "test:step5": "node tests/step5_integration.test.js",
+    "test:step6": "node tests/step6_backend.test.js",
+    "test:step7": "node tests/step7_backend.test.js"
   },
   "keywords": ["placement", "portal", "express", "mysql"],
   "author": "",

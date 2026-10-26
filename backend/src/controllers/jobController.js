@@ -5,19 +5,71 @@ const db = require('../config/db');
  */
 function parseStipend(val) {
   if (val === undefined || val === null || val === '') return null;
+  if (typeof val === 'boolean') return NaN;
+  if (typeof val !== 'number' && typeof val !== 'string') return NaN;
+  if (typeof val === 'string' && val.trim() === '') return null;
   const num = Number(val);
-  if (isNaN(num) || num < 0) return NaN;
+  if (!Number.isFinite(num) || isNaN(num) || num < 0 || num > 99999999.99) return NaN;
   return num;
 }
 
 /**
- * Helper to validate date string or null
+ * Helper to validate date string or null strictly as real YYYY-MM-DD
  */
 function parseDeadline(val) {
-  if (!val) return null;
-  const d = new Date(val);
-  if (isNaN(d.getTime())) return false;
-  return d.toISOString().slice(0, 19).replace('T', ' ');
+  if (val === undefined || val === null || val === '') return { value: null };
+  if (typeof val !== 'string') return { error: 'Invalid application_deadline format.' };
+
+  const trimmed = val.trim();
+  if (trimmed === '') return { value: null };
+
+  const dateRegex = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?Z?)?$/;
+  const match = trimmed.match(dateRegex);
+  if (!match) {
+    return { error: 'Invalid application_deadline format. Must be a valid date in YYYY-MM-DD format.' };
+  }
+
+  const year = parseInt(match[1], 10);
+  const month = parseInt(match[2], 10);
+  const day = parseInt(match[3], 10);
+
+  if (month < 1 || month > 12) {
+    return { error: 'Invalid calendar month in application_deadline.' };
+  }
+
+  const isLeap = (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+  const daysInMonth = [31, isLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  const maxDays = daysInMonth[month - 1];
+
+  if (day < 1 || day > maxDays) {
+    return { error: 'Invalid calendar day in application_deadline.' };
+  }
+
+  let hours = 23;
+  let minutes = 59;
+  let seconds = 59;
+
+  if (match[4] !== undefined) {
+    hours = parseInt(match[4], 10);
+    minutes = parseInt(match[5], 10);
+    seconds = parseInt(match[6], 10);
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59 || seconds < 0 || seconds > 59) {
+      return { error: 'Invalid time components in application_deadline.' };
+    }
+  }
+
+  const deadlineDate = new Date(year, month - 1, day, hours, minutes, seconds);
+  if (isNaN(deadlineDate.getTime())) {
+    return { error: 'Invalid application_deadline.' };
+  }
+
+  if (deadlineDate.getTime() < Date.now() - 60000) {
+    return { error: 'Application deadline cannot be in the past.' };
+  }
+
+  const pad = n => String(n).padStart(2, '0');
+  const formatted = `${year}-${pad(month)}-${pad(day)} ${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+  return { value: formatted };
 }
 
 /**
@@ -50,7 +102,7 @@ exports.createJob = async (req, res) => {
     company_id,
   } = req.body;
 
-  // 1. Sanitize text fields
+  // 1. Sanitize & validate text fields
   const cleanTitle = typeof title === 'string' ? title.trim() : '';
   const cleanDesc  = typeof description === 'string' ? description.trim() : '';
   const cleanLoc   = typeof location === 'string' ? location.trim() : '';
@@ -59,21 +111,38 @@ exports.createJob = async (req, res) => {
     return res.status(400).json({ error: 'Title, description, and location are required and cannot be empty.' });
   }
 
+  if (cleanTitle.length < 3 || cleanTitle.length > 150) {
+    return res.status(400).json({ error: 'Job title must be between 3 and 150 characters.' });
+  }
+
+  if (cleanDesc.length < 10 || cleanDesc.length > 5000) {
+    return res.status(400).json({ error: 'Job description must be between 10 and 5000 characters.' });
+  }
+
+  if (cleanLoc.length < 2 || cleanLoc.length > 100) {
+    return res.status(400).json({ error: 'Job location must be between 2 and 100 characters.' });
+  }
+
   // 2. Validate stipend
   const parsedStipend = parseStipend(stipend);
   if (Number.isNaN(parsedStipend)) {
-    return res.status(400).json({ error: 'Invalid stipend value. Must be a non-negative number.' });
+    return res.status(400).json({ error: 'Invalid stipend value. Must be a finite non-negative number.' });
   }
 
   // 3. Validate deadline
-  const parsedDeadline = parseDeadline(application_deadline);
-  if (parsedDeadline === false) {
-    return res.status(400).json({ error: 'Invalid application_deadline format.' });
+  const deadlineResult = parseDeadline(application_deadline);
+  if (deadlineResult.error) {
+    return res.status(400).json({ error: deadlineResult.error });
   }
+  const parsedDeadline = deadlineResult.value;
 
   const cleanEligibility = typeof eligibility_criteria === 'string' && eligibility_criteria.trim()
     ? eligibility_criteria.trim()
     : null;
+
+  if (cleanEligibility && cleanEligibility.length > 5000) {
+    return res.status(400).json({ error: 'Eligibility criteria cannot exceed 5000 characters.' });
+  }
 
   // 4. Role-Specific Logic
   if (user.role === 'company') {
@@ -90,8 +159,8 @@ exports.createJob = async (req, res) => {
         `INSERT INTO jobs (
           title, description, location, stipend,
           created_by, posting_source, recruiting_organization, company_id,
-          approval_status, job_status, application_deadline, eligibility_criteria
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          approval_status, job_status, application_deadline, eligibility_criteria, revision
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
         [
           cleanTitle, cleanDesc, cleanLoc, parsedStipend,
           finalCreatedBy, finalSource, finalOrg, finalCompanyId,
@@ -103,6 +172,7 @@ exports.createJob = async (req, res) => {
         message: 'Job submitted successfully and is awaiting Placement Cell approval.',
         jobId: result.insertId,
         approval_status: 'pending',
+        revision: 1,
       });
     } catch (err) {
       console.error('[createJob/company] DB error:', err.message);
@@ -144,13 +214,17 @@ exports.createJob = async (req, res) => {
       return res.status(400).json({ error: 'Recruiting organization name is required.' });
     }
 
+    if (targetOrg.length < 2 || targetOrg.length > 150) {
+      return res.status(400).json({ error: 'Recruiting organization name must be between 2 and 150 characters.' });
+    }
+
     try {
       const [result] = await db.promise().query(
         `INSERT INTO jobs (
           title, description, location, stipend,
           created_by, posting_source, recruiting_organization, company_id,
-          approval_status, job_status, application_deadline, eligibility_criteria
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          approval_status, job_status, application_deadline, eligibility_criteria, revision
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
         [
           cleanTitle, cleanDesc, cleanLoc, parsedStipend,
           user.id, 'placement_cell', targetOrg, targetCompanyId,
@@ -162,6 +236,7 @@ exports.createJob = async (req, res) => {
         message: 'Job published successfully.',
         jobId: result.insertId,
         approval_status: 'approved',
+        revision: 1,
       });
     } catch (err) {
       console.error('[createJob/admin] DB error:', err.message);
@@ -201,6 +276,7 @@ exports.getPendingJobs = async (req, res) => {
       jobs.job_status,
       jobs.application_deadline,
       jobs.eligibility_criteria,
+      jobs.revision,
       jobs.created_at,
       users.name AS submitting_company_name,
       users.email AS submitting_company_email
@@ -226,6 +302,7 @@ exports.getPendingJobs = async (req, res) => {
  * Request body:
  *   - approval_status: 'approved' | 'rejected'
  *   - rejection_reason: required when rejecting
+ *   - expected_revision: optional expected revision number to prevent stale approvals
  */
 exports.reviewJobApproval = async (req, res) => {
   const user = req.user;
@@ -239,7 +316,8 @@ exports.reviewJobApproval = async (req, res) => {
     return res.status(400).json({ error: 'Invalid job ID provided.' });
   }
 
-  const { approval_status, rejection_reason } = req.body;
+  const { approval_status, rejection_reason, expected_revision, revision } = req.body;
+  const expRev = expected_revision !== undefined ? expected_revision : revision;
 
   if (!approval_status || !['approved', 'rejected'].includes(approval_status)) {
     return res.status(400).json({
@@ -257,33 +335,57 @@ exports.reviewJobApproval = async (req, res) => {
     }
   }
 
+  let expRevNum = null;
+  if (expRev !== undefined && expRev !== null) {
+    expRevNum = Number(expRev);
+    if (isNaN(expRevNum) || expRevNum < 1) {
+      return res.status(400).json({ error: 'Invalid expected revision provided.' });
+    }
+  }
+
+  const conn = await db.promise().getConnection();
   try {
-    // 1. Fetch current job state to verify preconditions
-    const [jobRows] = await db.promise().query(
-      'SELECT id, posting_source, approval_status, job_status FROM jobs WHERE id = ?',
+    await conn.beginTransaction();
+
+    // 1. Fetch current job state with row lock for concurrency safety
+    const [jobRows] = await conn.query(
+      'SELECT id, posting_source, approval_status, job_status, revision FROM jobs WHERE id = ? FOR UPDATE',
       [jobId]
     );
 
     if (!jobRows || jobRows.length === 0) {
+      await conn.rollback();
       return res.status(404).json({ error: 'Job not found.' });
     }
 
     const job = jobRows[0];
 
     if (job.posting_source !== 'company') {
+      await conn.rollback();
       return res.status(400).json({
         error: 'Only company-created job postings require Placement Cell approval.',
       });
     }
 
     if (job.approval_status !== 'pending') {
+      await conn.rollback();
       return res.status(409).json({
         error: `Cannot review job. Current approval status is already '${job.approval_status}'.`,
       });
     }
 
-    // 2. Atomic conditional update to safely handle concurrent or repeated review requests
-    const updateSql = `
+    // Check revision concurrency
+    if (expRevNum !== null && job.revision !== expRevNum) {
+      await conn.rollback();
+      return res.status(409).json({
+        error: 'Conflict: This job posting has been edited by the company since you loaded it for review. Please review the updated revision.',
+        current_revision: job.revision,
+        expected_revision: expRevNum,
+      });
+    }
+
+    // 2. Atomic conditional update
+    let updateSql = `
       UPDATE jobs
       SET
         approval_status = ?,
@@ -294,19 +396,23 @@ exports.reviewJobApproval = async (req, res) => {
         AND approval_status = 'pending'
         AND posting_source = 'company'
     `;
+    const updateParams = [approval_status, cleanReason, user.id, jobId];
 
-    const [result] = await db.promise().query(updateSql, [
-      approval_status,
-      cleanReason,
-      user.id,
-      jobId,
-    ]);
+    if (expRevNum !== null) {
+      updateSql += ' AND revision = ?';
+      updateParams.push(expRevNum);
+    }
+
+    const [result] = await conn.query(updateSql, updateParams);
 
     if (result.affectedRows === 0) {
+      await conn.rollback();
       return res.status(409).json({
-        error: 'Conflict: This job posting has already been reviewed or its status changed.',
+        error: 'Conflict: This job posting has already been reviewed, modified, or its status changed.',
       });
     }
+
+    await conn.commit();
 
     return res.status(200).json({
       message: `Job has been successfully ${approval_status}.`,
@@ -314,10 +420,14 @@ exports.reviewJobApproval = async (req, res) => {
       approval_status,
       rejection_reason: cleanReason,
       reviewed_by: user.id,
+      revision: job.revision,
     });
   } catch (err) {
+    await conn.rollback();
     console.error('[reviewJobApproval] DB error:', err.message);
     return res.status(500).json({ error: 'Failed to update job approval status.' });
+  } finally {
+    conn.release();
   }
 };
 
@@ -414,6 +524,7 @@ exports.getJobs = async (req, res) => {
           jobs.job_status,
           jobs.application_deadline,
           jobs.eligibility_criteria,
+          jobs.revision,
           jobs.created_at,
           creator.name AS creator_name,
           creator.email AS creator_email,
@@ -491,6 +602,7 @@ exports.getJobById = async (req, res) => {
         jobs.job_status,
         jobs.application_deadline,
         jobs.eligibility_criteria,
+        jobs.revision,
         jobs.created_at
       FROM jobs
       WHERE jobs.id = ?
@@ -553,6 +665,7 @@ exports.getMyJobs = async (req, res) => {
       jobs.job_status,
       jobs.application_deadline,
       jobs.eligibility_criteria,
+      jobs.revision,
       jobs.created_at,
       COUNT(applications.id) AS application_count
     FROM jobs
@@ -571,30 +684,308 @@ exports.getMyJobs = async (req, res) => {
 };
 
 /**
- * deleteJob — Deletes a job posting.
- * Company can delete their own jobs; Admin can delete any job.
- * Companies cannot delete admin-created postings assigned to them.
+ * updateJob — Edit job details and handle resubmission.
+ * PATCH /api/jobs/:id
+ * Rules:
+ *   - Company: may edit only their own jobs (posting_source = 'company' AND company_id = user.id).
+ *              Every edit resets approval_status to 'pending', clears rejection_reason, reviewed_by, reviewed_at.
+ *   - Admin:   may edit Placement Cell postings (posting_source = 'placement_cell').
+ *              Preserves creator attribution and approval status.
+ *   - Protected fields (created_by, posting_source, company_id, approval_status, reviewed_by, reviewed_at)
+ *     are strictly protected against client tampering.
+ */
+exports.updateJob = async (req, res) => {
+  const user = req.user;
+  const jobId = Number(req.params.id);
+
+  if (isNaN(jobId) || jobId <= 0) {
+    return res.status(400).json({ error: 'Invalid job ID provided.' });
+  }
+
+  const {
+    title,
+    description,
+    location,
+    stipend,
+    application_deadline,
+    eligibility_criteria,
+    recruiting_organization,
+  } = req.body;
+
+  const conn = await db.promise().getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // 1. Fetch current job with row lock for concurrency safety
+    const [jobs] = await conn.query(
+      `SELECT
+        id, title, description, location, stipend,
+        created_by, posting_source, recruiting_organization, company_id,
+        approval_status, job_status, application_deadline, eligibility_criteria,
+        revision, rejection_reason, reviewed_by, reviewed_at
+      FROM jobs
+      WHERE id = ? FOR UPDATE`,
+      [jobId]
+    );
+
+    if (!jobs || jobs.length === 0) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Job not found.' });
+    }
+
+    const job = jobs[0];
+
+    // 2. Authorization and origin rules
+    if (user.role === 'company') {
+      if (job.posting_source !== 'company' || job.company_id !== user.id) {
+        await conn.rollback();
+        return res.status(403).json({ error: 'You do not have permission to edit this job.' });
+      }
+    } else if (user.role === 'admin') {
+      if (job.posting_source !== 'placement_cell') {
+        await conn.rollback();
+        return res.status(400).json({
+          error: 'Company-created postings must be reviewed through the Placement Cell approval workflow rather than edited directly.',
+        });
+      }
+    } else {
+      await conn.rollback();
+      return res.status(403).json({ error: 'Access forbidden.' });
+    }
+
+    // 3. Field validation
+    let newTitle = job.title;
+    if (title !== undefined) {
+      const clean = typeof title === 'string' ? title.trim() : '';
+      if (!clean) {
+        await conn.rollback();
+        return res.status(400).json({ error: 'Job title cannot be empty.' });
+      }
+      if (clean.length < 3 || clean.length > 150) {
+        await conn.rollback();
+        return res.status(400).json({ error: 'Job title must be between 3 and 150 characters.' });
+      }
+      newTitle = clean;
+    }
+
+    let newDesc = job.description;
+    if (description !== undefined) {
+      const clean = typeof description === 'string' ? description.trim() : '';
+      if (!clean) {
+        await conn.rollback();
+        return res.status(400).json({ error: 'Job description cannot be empty.' });
+      }
+      if (clean.length < 10 || clean.length > 5000) {
+        await conn.rollback();
+        return res.status(400).json({ error: 'Job description must be between 10 and 5000 characters.' });
+      }
+      newDesc = clean;
+    }
+
+    let newLoc = job.location;
+    if (location !== undefined) {
+      const clean = typeof location === 'string' ? location.trim() : '';
+      if (!clean) {
+        await conn.rollback();
+        return res.status(400).json({ error: 'Job location cannot be empty.' });
+      }
+      if (clean.length < 2 || clean.length > 100) {
+        await conn.rollback();
+        return res.status(400).json({ error: 'Job location must be between 2 and 100 characters.' });
+      }
+      newLoc = clean;
+    }
+
+    let newStipend = job.stipend;
+    if (stipend !== undefined) {
+      const parsed = parseStipend(stipend);
+      if (Number.isNaN(parsed)) {
+        await conn.rollback();
+        return res.status(400).json({ error: 'Invalid stipend value. Must be a finite non-negative number.' });
+      }
+      newStipend = parsed;
+    }
+
+    let newDeadline = job.application_deadline;
+    if (application_deadline !== undefined) {
+      const deadlineResult = parseDeadline(application_deadline);
+      if (deadlineResult.error) {
+        await conn.rollback();
+        return res.status(400).json({ error: deadlineResult.error });
+      }
+      newDeadline = deadlineResult.value;
+    }
+
+    let newEligibility = job.eligibility_criteria;
+    if (eligibility_criteria !== undefined) {
+      const clean = typeof eligibility_criteria === 'string' && eligibility_criteria.trim()
+        ? eligibility_criteria.trim()
+        : null;
+      if (clean && clean.length > 5000) {
+        await conn.rollback();
+        return res.status(400).json({ error: 'Eligibility criteria cannot exceed 5000 characters.' });
+      }
+      newEligibility = clean;
+    }
+
+    let newOrg = job.recruiting_organization;
+    if (user.role === 'admin' && recruiting_organization !== undefined) {
+      const clean = typeof recruiting_organization === 'string' ? recruiting_organization.trim() : '';
+      if (!clean) {
+        await conn.rollback();
+        return res.status(400).json({ error: 'Recruiting organization name cannot be empty.' });
+      }
+      if (clean.length < 2 || clean.length > 150) {
+        await conn.rollback();
+        return res.status(400).json({ error: 'Recruiting organization name must be between 2 and 150 characters.' });
+      }
+      newOrg = clean;
+    }
+
+    // 4. Update according to role
+    if (user.role === 'company') {
+      // Company edit: Resets approval_status to 'pending', clears rejection_reason and review audit, increments revision
+      const updateSql = `
+        UPDATE jobs
+        SET
+          title = ?,
+          description = ?,
+          location = ?,
+          stipend = ?,
+          application_deadline = ?,
+          eligibility_criteria = ?,
+          approval_status = 'pending',
+          rejection_reason = NULL,
+          reviewed_by = NULL,
+          reviewed_at = NULL,
+          revision = revision + 1
+        WHERE id = ? AND company_id = ? AND posting_source = 'company'
+      `;
+
+      await conn.query(updateSql, [
+        newTitle,
+        newDesc,
+        newLoc,
+        newStipend,
+        newDeadline,
+        newEligibility,
+        jobId,
+        user.id,
+      ]);
+
+      await conn.commit();
+
+      return res.status(200).json({
+        message: 'Job updated successfully and resubmitted for Placement Cell approval.',
+        jobId,
+        approval_status: 'pending',
+        rejection_reason: null,
+        revision: (job.revision || 1) + 1,
+      });
+
+    } else {
+      // Admin edit: Placement Cell posting, preserves creator and approval status
+      const updateSql = `
+        UPDATE jobs
+        SET
+          title = ?,
+          description = ?,
+          location = ?,
+          stipend = ?,
+          application_deadline = ?,
+          eligibility_criteria = ?,
+          recruiting_organization = ?
+        WHERE id = ? AND posting_source = 'placement_cell'
+      `;
+
+      await conn.query(updateSql, [
+        newTitle,
+        newDesc,
+        newLoc,
+        newStipend,
+        newDeadline,
+        newEligibility,
+        newOrg,
+        jobId,
+      ]);
+
+      await conn.commit();
+
+      return res.status(200).json({
+        message: 'Placement Cell job updated successfully.',
+        jobId,
+        approval_status: job.approval_status,
+      });
+    }
+
+  } catch (err) {
+    await conn.rollback();
+    console.error('[updateJob] DB error:', err.message);
+    return res.status(500).json({ error: 'Failed to update job.' });
+  } finally {
+    conn.release();
+  }
+};
+
+/**
+ * deleteJob — Deletes a job posting if it has no applications.
+ * Jobs with student applications are strictly protected (HTTP 409 Conflict).
  */
 exports.deleteJob = async (req, res) => {
   const user = req.user;
-  const jobId = req.params.id;
+  const jobId = Number(req.params.id);
+
+  if (isNaN(jobId) || jobId <= 0) {
+    return res.status(400).json({ error: 'Invalid job ID provided.' });
+  }
 
   try {
-    let result;
-    if (user.role === 'admin') {
-      [result] = await db.promise().query('DELETE FROM jobs WHERE id = ?', [jobId]);
-    } else {
-      [result] = await db.promise().query(
-        'DELETE FROM jobs WHERE id = ? AND company_id = ? AND posting_source = "company"',
-        [jobId, user.id]
-      );
+    // 1. Fetch job to verify existence and ownership
+    const [jobs] = await db.promise().query(
+      'SELECT id, created_by, posting_source, company_id FROM jobs WHERE id = ?',
+      [jobId]
+    );
+
+    if (!jobs || jobs.length === 0) {
+      return res.status(404).json({ error: 'Job not found.' });
     }
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Job not found or you do not have permission to delete it.' });
+    const job = jobs[0];
+
+    // Authorization:
+    // Admin can delete any job without applications.
+    // Company can only delete their own jobs (posting_source = 'company' AND company_id = user.id).
+    if (user.role === 'company') {
+      if (job.posting_source !== 'company' || job.company_id !== user.id) {
+        return res.status(403).json({ error: 'You do not have permission to delete this job.' });
+      }
+    } else if (user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access forbidden.' });
     }
+
+    // 2. Check for existing applications to protect application history
+    const [apps] = await db.promise().query(
+      'SELECT COUNT(*) AS count FROM applications WHERE job_id = ?',
+      [jobId]
+    );
+
+    if (apps[0].count > 0) {
+      return res.status(409).json({
+        error: 'Cannot permanently delete a job with existing student applications. Please close the job instead to preserve application records.',
+        application_count: apps[0].count,
+      });
+    }
+
+    // 3. Delete job without applications
+    await db.promise().query('DELETE FROM jobs WHERE id = ?', [jobId]);
+
     return res.status(200).json({ message: 'Job deleted successfully.' });
   } catch (err) {
+    if (err.code === 'ER_ROW_IS_REFERENCED_2' || err.errno === 1451) {
+      return res.status(409).json({
+        error: 'Cannot permanently delete a job with existing student applications. Please close the job instead to preserve application records.',
+      });
+    }
     console.error('[deleteJob] DB error:', err.message);
     return res.status(500).json({ error: 'Failed to delete job.' });
   }

@@ -1,8 +1,8 @@
 /* Placement Portal Unified Role-Aware Dashboard
  * Roles supported:
  *   - student: job search, applications, personal stats
- *   - company: company postings, approval status, rejection reasons, applicants, availability
- *   - admin:   Placement Cell console (stats, pending approvals, direct job posting, all jobs management)
+ *   - company: company postings, approval status, rejection reasons, editing & resubmission, applicants, availability
+ *   - admin:   Placement Cell console (stats, pending approvals, direct job posting, admin job editing, all jobs management)
  */
 
 if (!session.token()) location.href = 'login.html';
@@ -18,10 +18,15 @@ const money = v => (v !== null && v !== undefined && v !== '') ? '₹' + Number(
 const fmtDate = d => {
   if (!d) return 'None';
   const dt = new Date(d);
-  return isNaN(dt.getTime()) ? String(d) : dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  return isNaN(dt.getTime()) ? esc(String(d ?? '')) : dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 };
-const chip = s => `<span class="chip ${esc(s)}">${esc(s.replace(/_/g, ' '))}</span>`;
-const empty = (msg, btn = '') => `<div class="empty"><p class="muted">${msg}</p>${btn}</div>`;
+const fmtDateTimeInput = d => {
+  if (!d) return '';
+  const dt = new Date(d);
+  return isNaN(dt.getTime()) ? '' : dt.toISOString().slice(0, 16);
+};
+const chip = s => `<span class="chip ${esc(s || '')}">${esc(String(s ?? '').replace(/_/g, ' '))}</span>`;
+const empty = (msg, btn = '') => `<div class="empty"><p class="muted">${esc(msg)}</p>${btn}</div>`;
 
 // Data Loaders
 const loadJobs = async () => { jobs = await api('/api/jobs'); };
@@ -120,7 +125,7 @@ async function viewApps(el) {
 }
 
 /* =============================================================================
- * 2. COMPANY VIEWS
+ * 2. COMPANY VIEWS (WITH EDITING & REJECTION RESUBMISSION)
  * ============================================================================= */
 async function viewCompanyJobs(el) {
   await loadCompanyJobs();
@@ -128,6 +133,7 @@ async function viewCompanyJobs(el) {
     const isOwner = j.posting_source === 'company';
     const isRejected = j.approval_status === 'rejected';
     const isOpen = j.job_status === 'open';
+    const appCount = Number(j.application_count || 0);
 
     return `
       <section class="row" data-job="${j.id}">
@@ -138,7 +144,7 @@ async function viewCompanyJobs(el) {
               <span>${esc(j.location)}</span>
               <span>${money(j.stipend)}</span>
               ${j.application_deadline ? `<span>Deadline: ${fmtDate(j.application_deadline)}</span>` : ''}
-              <span>${Number(j.application_count || 0)} Applicants</span>
+              <span>${appCount} Applicants</span>
             </div>
           </div>
           <div class="meta">
@@ -146,24 +152,112 @@ async function viewCompanyJobs(el) {
             ${chip(j.job_status)}
           </div>
           <div class="acts">
-            <button class="btn ghost sm" data-ap="${j.id}">Applicants (${Number(j.application_count || 0)})</button>
+            <button class="btn ghost sm" data-ap="${j.id}">Applicants (${appCount})</button>
             ${isOwner ? `
+              <button class="btn sm" data-edit-co="${j.id}">Edit & Resubmit</button>
               <button class="btn ghost sm" data-status-toggle="${j.id}" data-target-status="${isOpen ? 'closed' : 'open'}">
                 ${isOpen ? 'Close' : 'Reopen'}
               </button>
-              <button class="btn danger sm" data-del="${j.id}">Delete</button>
+              ${appCount > 0 ? `
+                <button class="btn danger sm" disabled title="Protected: cannot delete job with existing applications">Delete</button>
+              ` : `
+                <button class="btn danger sm" data-del="${j.id}">Delete</button>
+              `}
             ` : '<span class="help">Placement Cell Managed</span>'}
           </div>
         </div>
+
         ${isRejected && j.rejection_reason ? `
-          <div class="rejection-box">
+          <div class="rejection-box" id="rej-callout-${j.id}">
             <b>Rejection Reason:</b> ${esc(j.rejection_reason)}
+            <p class="help">Use the "Edit & Resubmit" button above to address this feedback and request fresh Placement Cell review.</p>
           </div>
         ` : ''}
+
+        <!-- Company Edit & Resubmission Drawer -->
+        <div class="edit-box-co" id="edit-box-co-${j.id}" style="display:none; margin-top:1rem; border-top:1px solid var(--line); padding-top:1rem;">
+          <form id="form-edit-co-${j.id}" class="box" style="max-width:100%; border:none; padding:0; background:transparent;">
+            <h4 style="margin:0 0 1rem 0;">Edit Posting & Resubmit for Review</h4>
+
+            <label for="ed-t-${j.id}">Job Title *</label>
+            <input id="ed-t-${j.id}" name="title" required value="${esc(j.title)}">
+
+            <label for="ed-l-${j.id}">Location *</label>
+            <input id="ed-l-${j.id}" name="location" required value="${esc(j.location)}">
+
+            <label for="ed-s-${j.id}">Monthly Stipend (₹, optional)</label>
+            <input id="ed-s-${j.id}" name="stipend" type="number" min="0" value="${j.stipend !== null && j.stipend !== undefined ? esc(j.stipend) : ''}">
+
+            <label for="ed-dl-${j.id}">Application Deadline (optional)</label>
+            <input id="ed-dl-${j.id}" name="application_deadline" type="datetime-local" value="${fmtDateTimeInput(j.application_deadline)}">
+
+            <label for="ed-ec-${j.id}">Eligibility Criteria (optional)</label>
+            <input id="ed-ec-${j.id}" name="eligibility_criteria" value="${esc(j.eligibility_criteria || '')}">
+
+            <label for="ed-d-${j.id}">Job Description *</label>
+            <textarea id="ed-d-${j.id}" name="description" rows="5" required>${esc(j.description)}</textarea>
+
+            <p class="err" id="edit-co-err-${j.id}"></p>
+            <div class="acts" style="margin-top:1rem;">
+              <button class="btn" type="submit" id="btn-save-co-${j.id}">Save & Resubmit</button>
+              <button class="btn ghost" type="button" data-cancel-co-edit="${j.id}">Cancel</button>
+            </div>
+          </form>
+        </div>
+
         <div class="panel" hidden></div>
       </section>
     `;
   }).join('') : empty("You haven't posted any jobs yet.", '<button class="btn" data-view="post">Post a Job</button>');
+
+  // Attach submit listeners & safe form-value assignments for each edit form
+  jobs.forEach(j => {
+    const editForm = $(`#form-edit-co-${j.id}`);
+    if (editForm) {
+      const tInput = $(`#ed-t-${j.id}`);
+      const lInput = $(`#ed-l-${j.id}`);
+      const dInput = $(`#ed-d-${j.id}`);
+      const ecInput = $(`#ed-ec-${j.id}`);
+      if (tInput && j.title !== undefined) tInput.value = j.title;
+      if (lInput && j.location !== undefined) lInput.value = j.location;
+      if (dInput && j.description !== undefined) dInput.value = j.description;
+      if (ecInput && j.eligibility_criteria !== undefined) ecInput.value = j.eligibility_criteria || '';
+
+      editForm.onsubmit = async e => {
+        e.preventDefault();
+        const btn = $(`#btn-save-co-${j.id}`);
+        const errEl = $(`#edit-co-err-${j.id}`);
+        btn.disabled = true;
+        btn.textContent = 'Resubmitting...';
+        errEl.textContent = '';
+
+        const payload = {
+          title: $(`#ed-t-${j.id}`).value.trim(),
+          location: $(`#ed-l-${j.id}`).value.trim(),
+          description: $(`#ed-d-${j.id}`).value.trim(),
+        };
+
+        const stipendVal = $(`#ed-s-${j.id}`).value;
+        payload.stipend = stipendVal ? Number(stipendVal) : null;
+
+        const deadlineVal = $(`#ed-dl-${j.id}`).value;
+        payload.application_deadline = deadlineVal ? deadlineVal : null;
+
+        const eligVal = $(`#ed-ec-${j.id}`).value.trim();
+        payload.eligibility_criteria = eligVal ? eligVal : null;
+
+        try {
+          await api(`/api/jobs/${j.id}`, { method: 'PATCH', body: payload });
+          toast('Job updated and resubmitted for Placement Cell approval.');
+          show('jobs');
+        } catch (err) {
+          errEl.textContent = err.message;
+          btn.disabled = false;
+          btn.textContent = 'Save & Resubmit';
+        }
+      };
+    }
+  });
 }
 
 function viewCompanyPost(el) {
@@ -218,7 +312,7 @@ function viewCompanyPost(el) {
 }
 
 /* =============================================================================
- * 3. ADMINISTRATOR (PLACEMENT CELL) VIEWS
+ * 3. ADMINISTRATOR (PLACEMENT CELL) VIEWS (WITH ADMIN JOB EDITING)
  * ============================================================================= */
 
 /**
@@ -240,16 +334,16 @@ async function viewAdminOverview(el) {
         <h2>System Summary</h2>
         <ul style="line-height: 1.8;">
           <li>Company postings require administrator approval before student visibility.</li>
+          <li>Substantive edits to company jobs automatically require fresh approval.</li>
           <li>Direct Placement Cell jobs are immediately approved and published.</li>
           <li>Closed or expired jobs never accept applications.</li>
-          <li>Associated companies can review applicants without delete permissions.</li>
+          <li>Jobs with student applications cannot be permanently deleted.</li>
         </ul>
       </section>
     </div>
     <div id="overview-pending-section"></div>
   `;
 
-  // Mini-preview of pending jobs in overview
   try {
     await loadPendingQueue();
     const prevEl = $('#overview-pending-section');
@@ -310,7 +404,7 @@ async function viewPendingApprovals(el) {
           ${chip(j.approval_status)}
         </div>
         <div class="acts">
-          <button class="btn sm" data-approve="${j.id}">Approve</button>
+          <button class="btn sm" data-approve="${j.id}" data-rev="${j.revision || 1}">Approve</button>
           <button class="btn danger sm" data-reject-toggle="${j.id}">Reject</button>
         </div>
       </div>
@@ -325,7 +419,7 @@ async function viewPendingApprovals(el) {
         <label for="reject-reason-${j.id}" style="margin:0; font-weight:600;">Rejection Reason (Required for Submitting Company):</label>
         <textarea id="reject-reason-${j.id}" placeholder="Explain clearly why this job posting was rejected (e.g. insufficient compensation, missing criteria)..."></textarea>
         <div class="acts">
-          <button class="btn danger sm" data-reject-submit="${j.id}">Confirm Rejection</button>
+          <button class="btn danger sm" data-reject-submit="${j.id}" data-rev="${j.revision || 1}">Confirm Rejection</button>
           <button class="btn ghost sm" data-reject-cancel="${j.id}">Cancel</button>
         </div>
       </div>
@@ -450,7 +544,7 @@ async function viewAdminPostJob(el) {
 }
 
 /**
- * Admin View: All Job Postings Management
+ * Admin View: All Job Postings Management (with Placement Cell Job Editing)
  */
 async function viewAllJobs(el) {
   await loadAllJobs();
@@ -502,6 +596,8 @@ async function viewAllJobs(el) {
     container.innerHTML = list.map(j => {
       const isOpen = j.job_status === 'open';
       const isRejected = j.approval_status === 'rejected';
+      const isPlacementCell = j.posting_source === 'placement_cell';
+      const appCount = Number(j.application_count || 0);
 
       return `
         <section class="row" data-job="${j.id}">
@@ -510,14 +606,14 @@ async function viewAllJobs(el) {
               <h3>${esc(j.title)}</h3>
               <p class="muted">
                 <b>Organization:</b> ${esc(j.recruiting_organization)} &bull;
-                <b>Created By:</b> ${esc(j.creator_name || 'Admin')} (${esc(j.posting_source.replace(/_/g, ' '))})
+                <b>Created By:</b> ${esc(j.creator_name || 'Placement Cell')} (${esc(j.posting_source.replace(/_/g, ' '))})
               </p>
               <div class="meta" style="margin-top: .4rem;">
                 <span>${esc(j.location)}</span>
                 <span>${money(j.stipend)}</span>
                 <span>Created ${fmtDate(j.created_at)}</span>
                 ${j.application_deadline ? `<span>Deadline: ${fmtDate(j.application_deadline)}</span>` : '<span class="muted">No deadline</span>'}
-                <span>${Number(j.application_count || 0)} Applications</span>
+                <span>${appCount} Applications</span>
               </div>
             </div>
             <div class="meta">
@@ -526,13 +622,20 @@ async function viewAllJobs(el) {
               ${chip(j.job_status)}
             </div>
             <div class="acts">
+              ${isPlacementCell ? `
+                <button class="btn ghost sm" data-edit-admin="${j.id}">Edit</button>
+              ` : ''}
               <button class="btn ghost sm" data-status-toggle="${j.id}" data-target-status="${isOpen ? 'closed' : 'open'}">
                 ${isOpen ? 'Close' : 'Reopen'}
               </button>
               <button class="btn ghost sm" data-ap="${j.id}">
-                Applicants (${Number(j.application_count || 0)})
+                Applicants (${appCount})
               </button>
-              <button class="btn danger sm" data-del="${j.id}">Delete</button>
+              ${appCount > 0 ? `
+                <button class="btn danger sm" disabled title="Protected: cannot delete job with existing applications">Delete</button>
+              ` : `
+                <button class="btn danger sm" data-del="${j.id}">Delete</button>
+              `}
             </div>
           </div>
 
@@ -543,10 +646,98 @@ async function viewAllJobs(el) {
             </div>
           ` : ''}
 
+          <!-- Admin Placement Cell Edit Drawer -->
+          ${isPlacementCell ? `
+            <div class="edit-box-admin" id="edit-box-admin-${j.id}" style="display:none; margin-top:1rem; border-top:1px solid var(--line); padding-top:1rem;">
+              <form id="form-edit-admin-${j.id}" class="box" style="max-width:100%; border:none; padding:0; background:transparent;">
+                <h4 style="margin: 0 0 1rem 0;">Edit Placement Cell Job</h4>
+
+                <label for="adm-ed-org-${j.id}">Recruiting Organization *</label>
+                <input id="adm-ed-org-${j.id}" name="recruiting_organization" required value="${esc(j.recruiting_organization)}">
+
+                <label for="adm-ed-t-${j.id}">Job Title *</label>
+                <input id="adm-ed-t-${j.id}" name="title" required value="${esc(j.title)}">
+
+                <label for="adm-ed-l-${j.id}">Location *</label>
+                <input id="adm-ed-l-${j.id}" name="location" required value="${esc(j.location)}">
+
+                <label for="adm-ed-s-${j.id}">Monthly Stipend (₹, optional)</label>
+                <input id="adm-ed-s-${j.id}" name="stipend" type="number" min="0" value="${j.stipend !== null && j.stipend !== undefined ? esc(j.stipend) : ''}">
+
+                <label for="adm-ed-dl-${j.id}">Application Deadline (optional)</label>
+                <input id="adm-ed-dl-${j.id}" name="application_deadline" type="datetime-local" value="${fmtDateTimeInput(j.application_deadline)}">
+
+                <label for="adm-ed-ec-${j.id}">Eligibility Criteria (optional)</label>
+                <input id="adm-ed-ec-${j.id}" name="eligibility_criteria" value="${esc(j.eligibility_criteria || '')}">
+
+                <label for="adm-ed-d-${j.id}">Job Description *</label>
+                <textarea id="adm-ed-d-${j.id}" name="description" rows="5" required>${esc(j.description)}</textarea>
+
+                <p class="err" id="edit-adm-err-${j.id}"></p>
+                <div class="acts" style="margin-top:1rem;">
+                  <button class="btn" type="submit" id="btn-save-adm-${j.id}">Save Changes</button>
+                  <button class="btn ghost" type="button" data-cancel-admin-edit="${j.id}">Cancel</button>
+                </div>
+              </form>
+            </div>
+          ` : ''}
+
           <div class="panel" hidden></div>
         </section>
       `;
     }).join('');
+
+    // Attach submit listeners & safe form-value assignments for admin edit forms
+    list.forEach(j => {
+      const form = $(`#form-edit-admin-${j.id}`);
+      if (form) {
+        const orgInput = $(`#adm-ed-org-${j.id}`);
+        const tInput = $(`#adm-ed-t-${j.id}`);
+        const lInput = $(`#adm-ed-l-${j.id}`);
+        const dInput = $(`#adm-ed-d-${j.id}`);
+        const ecInput = $(`#adm-ed-ec-${j.id}`);
+        if (orgInput && j.recruiting_organization !== undefined) orgInput.value = j.recruiting_organization;
+        if (tInput && j.title !== undefined) tInput.value = j.title;
+        if (lInput && j.location !== undefined) lInput.value = j.location;
+        if (dInput && j.description !== undefined) dInput.value = j.description;
+        if (ecInput && j.eligibility_criteria !== undefined) ecInput.value = j.eligibility_criteria || '';
+
+        form.onsubmit = async e => {
+          e.preventDefault();
+          const btn = $(`#btn-save-adm-${j.id}`);
+          const errEl = $(`#edit-adm-err-${j.id}`);
+          btn.disabled = true;
+          btn.textContent = 'Saving...';
+          errEl.textContent = '';
+
+          const payload = {
+            recruiting_organization: $(`#adm-ed-org-${j.id}`).value.trim(),
+            title: $(`#adm-ed-t-${j.id}`).value.trim(),
+            location: $(`#adm-ed-l-${j.id}`).value.trim(),
+            description: $(`#adm-ed-d-${j.id}`).value.trim(),
+          };
+
+          const stipendVal = $(`#adm-ed-s-${j.id}`).value;
+          payload.stipend = stipendVal ? Number(stipendVal) : null;
+
+          const deadlineVal = $(`#adm-ed-dl-${j.id}`).value;
+          payload.application_deadline = deadlineVal ? deadlineVal : null;
+
+          const eligVal = $(`#adm-ed-ec-${j.id}`).value.trim();
+          payload.eligibility_criteria = eligVal ? eligVal : null;
+
+          try {
+            await api(`/api/jobs/${j.id}`, { method: 'PATCH', body: payload });
+            toast('Placement Cell job updated successfully.');
+            show('all');
+          } catch (err) {
+            errEl.textContent = err.message;
+            btn.disabled = false;
+            btn.textContent = 'Save Changes';
+          }
+        };
+      }
+    });
   };
 
   $('#filter-q').oninput = renderFilteredJobs;
@@ -656,7 +847,10 @@ document.addEventListener('click', async e => {
       try {
         await api(`/api/jobs/${d.approve}/approval`, {
           method: 'PATCH',
-          body: { approval_status: 'approved' },
+          body: {
+            approval_status: 'approved',
+            expected_revision: d.rev ? Number(d.rev) : undefined,
+          },
         });
         toast('Job approved and published.');
         show('pending');
@@ -689,7 +883,11 @@ document.addEventListener('click', async e => {
       try {
         await api(`/api/jobs/${d.rejectSubmit}/approval`, {
           method: 'PATCH',
-          body: { approval_status: 'rejected', rejection_reason: reason },
+          body: {
+            approval_status: 'rejected',
+            rejection_reason: reason,
+            expected_revision: d.rev ? Number(d.rev) : undefined,
+          },
         });
         toast('Job posting rejected.');
         show('pending');
@@ -698,6 +896,26 @@ document.addEventListener('click', async e => {
         b.textContent = 'Confirm Rejection';
         throw err;
       }
+    } else if (d.editCo) {
+      // Toggle Company Edit Drawer
+      const box = $(`#edit-box-co-${d.editCo}`);
+      if (box) {
+        box.style.display = box.style.display === 'none' ? 'block' : 'none';
+      }
+    } else if (d.cancelCoEdit) {
+      // Cancel Company Edit Drawer
+      const box = $(`#edit-box-co-${d.cancelCoEdit}`);
+      if (box) box.style.display = 'none';
+    } else if (d.editAdmin) {
+      // Toggle Admin Edit Drawer
+      const box = $(`#edit-box-admin-${d.editAdmin}`);
+      if (box) {
+        box.style.display = box.style.display === 'none' ? 'block' : 'none';
+      }
+    } else if (d.cancelAdminEdit) {
+      // Cancel Admin Edit Drawer
+      const box = $(`#edit-box-admin-${d.cancelAdminEdit}`);
+      if (box) box.style.display = 'none';
     } else if (d.statusToggle) {
       // Job Availability Toggle (open / closed)
       const targetStatus = d.targetStatus;
@@ -717,9 +935,14 @@ document.addEventListener('click', async e => {
       // Delete Job
       if (confirm('Delete this job posting and all its associated records?')) {
         b.disabled = true;
-        await api('/api/jobs/' + d.del, { method: 'DELETE' });
-        toast('Job deleted successfully.');
-        show(isAdmin ? 'all' : 'jobs');
+        try {
+          await api('/api/jobs/' + d.del, { method: 'DELETE' });
+          toast('Job deleted successfully.');
+          show(isAdmin ? 'all' : 'jobs');
+        } catch (err) {
+          b.disabled = false;
+          toast(err.message, 'bad');
+        }
       }
     } else if (d.st) {
       // Application Status Update (shortlisted / rejected)

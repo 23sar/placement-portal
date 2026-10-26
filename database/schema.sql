@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS jobs (
                           NOT NULL DEFAULT 'open',
   application_deadline    DATETIME       NULL,
   eligibility_criteria    TEXT           NULL,
+  revision                INT UNSIGNED   NOT NULL DEFAULT 1,
   rejection_reason        TEXT           NULL,
   reviewed_by             INT UNSIGNED   NULL,
   reviewed_at             DATETIME       NULL,
