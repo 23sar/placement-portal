@@ -1,250 +1,249 @@
-# 🎓 Campus Placement Portal
+# Campus Placement Portal
 
-A production-ready, full-stack college recruitment management system built to connect students with hiring companies. The platform streamlines job postings, student applications, and candidate evaluation through an intuitive, role-based web interface.
+A full-stack campus recruitment management application for students, recruiting companies, and a college Placement Cell administrator. The portal manages job posting, approval, applications, candidate review, and application-history retention through a role-aware web interface and an Express/MySQL API.
 
----
+> **Project status:** The core workflows and automated regression suites have been implemented and tested locally. Complete browser-based acceptance testing and deployment-specific hardening should be performed before using the system for real college recruitment. This README does not claim the application is production-ready.
 
-## 🚀 Key Features
+## Features
 
-### 👨‍🎓 For Students
-- **Role-based Authentication:** Secure JWT-based registration and login with bcrypt password hashing.
-- **Job Discovery & Search:** Browse active job and internship openings with real-time title/location search filtering.
-- **One-Click Application:** Apply for open positions with database-enforced duplicate prevention.
-- **Application Tracking:** Real-time status tracking (Pending, Shortlisted, Rejected) with color-coded status badges.
-- **Personalized Metrics:** Real-time dashboard showing application counts and review status.
+### Students
+- Register and sign in using JWT-based authentication.
+- Browse jobs that have been approved, are open, and have not passed their application deadline.
+- Apply to eligible jobs and view application history/status.
+- Duplicate applications are prevented at the database level.
+- View a role-specific dashboard and application metrics.
 
-### 🏢 For Companies
-- **Job Lifecycle Management:** Create, list, view, and delete job postings with stipend, location, and description details.
-- **Applicant Review Pipeline:** View all students who applied for each specific job posting.
-- **Decision Workflow:** In-place shortlisting and rejection of candidates without page reloads.
-- **Company Dashboard:** Overview of total jobs posted, total applicants, shortlisted counts, and pending reviews.
+### Companies
+- Create job postings, which enter the Placement Cell approval queue.
+- View their own postings and approval status.
+- Edit their own company-created jobs. A substantive edit returns the posting to **Pending Approval** and clears the previous rejection/review metadata as appropriate.
+- See rejection reasons and resubmit corrected postings for review.
+- View applicants for postings they are authorized to manage and update candidate decisions using the existing application workflow.
+- Close or reopen eligible company-owned postings.
+- Cannot edit or delete Placement Cell-managed postings, even when associated with a company account for applicant review.
 
-### 🎨 UI & Aesthetics
-- Clean modern interface styled with Tailwind CSS and Font Awesome icons.
-- Instant Dark/Light mode toggle with persistence via `localStorage`.
-- Mobile-friendly responsive layouts with desktop sidebars.
+### Placement Cell administrators
+- View dashboard metrics and the pending company-job approval queue.
+- Approve or reject company postings; a meaningful rejection reason is required.
+- Publish jobs directly for external organizations or registered companies without sending Placement Cell-created postings through the company approval queue.
+- View and filter all job postings, including posting source, approval state, availability, creator/reviewer metadata, and application counts.
+- Edit Placement Cell-created postings while preserving their creator attribution and posting source.
+- Manage job availability and review applicants within the existing permission rules.
+- Use revision-aware review requests to reject stale approval/rejection actions when the posting has changed since it was reviewed.
 
----
+### Application history and data integrity
+- Jobs with existing applications cannot be permanently deleted through the application; the API returns **HTTP 409 Conflict** and advises the authorized user to close the job instead.
+- The `applications.job_id` foreign key uses `ON DELETE RESTRICT` in the current schema, helping prevent accidental loss of application history.
+- Editing or resubmitting a job preserves its ID and existing applications.
+- User accounts associated with historical records are intended to be deactivated rather than physically deleted.
 
-## 🛠 Tech Stack
+## Technology stack
 
 | Layer | Technology |
 |---|---|
-| **Backend** | Node.js, Express.js (Modular Router & Controller architecture) |
-| **Database** | MySQL (Relational schema with foreign keys, indexes & constraints) |
-| **Authentication** | JWT (`jsonwebtoken`) & `bcrypt` password hashing |
-| **Frontend** | Semantic HTML5, Vanilla JavaScript (ES6+ modular fetch API), Tailwind CSS |
-| **Documentation** | Markdown API specs (`docs/api.md`), Schema & Seed scripts |
+| Backend | Node.js, Express.js, modular routes and controllers |
+| Database | MySQL with InnoDB foreign keys, indexes, and constraints |
+| Authentication | JSON Web Tokens (`jsonwebtoken`) and `bcrypt` password hashing |
+| Frontend | HTML, CSS, Vanilla JavaScript, Fetch API |
+| Other | `mysql2`, `dotenv`, Express CORS middleware |
 
----
+## Repository layout
 
-## 📂 Project Architecture
-
-```
+```text
 placement-portal/
-├── README.md                  # Project overview, setup, and features
-├── .gitignore                 # Version control exclusions
-│
-├── docs/                      # Architectural & API reference
-│   ├── api.md                 # Complete REST API specification
-│   └── screenshots/           # UI walkthrough captures
-│
-├── database/                  # Database definitions
-│   ├── schema.sql             # Table definitions & foreign key constraints
-│   └── seed.sql               # Demo data with verified bcrypt hashes
-│
-├── backend/                   # Express.js REST API
+├── README.md
+├── docs/
+│   └── api.md                         # API reference
+├── database/
+│   ├── schema.sql                     # Fresh-install schema
+│   ├── seed.sql                       # Local demo users/data
+│   ├── seed_admin_dev.sql             # Development-only admin seed
+│   ├── verify_migration.js            # Migration verification utility
+│   └── migrations/
+│       ├── 001_job_approval_workflow.sql
+│       ├── 002_approval_review_audit.sql
+│       ├── 003_restrict_application_deletion.sql
+│       └── 004_add_job_revision.sql
+├── backend/
+│   ├── .env.example                   # Environment template; safe to commit
 │   ├── package.json
-│   ├── .env.example           # Template for environment configuration
-│   ├── .env                   # Local environment secrets (not committed)
-│   └── src/
-│       ├── server.js          # Server entrypoint (initializes port & DB pool)
-│       ├── app.js             # Express app setup (CORS, JSON parser, routes, error handlers)
-│       ├── config/
-│       │   └── db.js          # MySQL2 connection pool with promise wrapper
-│       ├── middleware/
-│       │   ├── auth.js        # JWT verification and role authorization guards
-│       │   └── errorHandler.js# Centralized error handler
-│       ├── routes/
-│       │   ├── auth.js        # /api/auth routes
-│       │   ├── jobs.js        # /api/jobs routes
-│       │   └── applications.js# /api/applications routes
-│       └── controllers/
-│           ├── authController.js
-│           ├── jobController.js
-│           └── applicationController.js
-│
-└── frontend/                  # Client-side web application
-    ├── index.html             # Landing page
+│   ├── src/
+│   │   ├── server.js                  # Server entry point
+│   │   ├── app.js                     # Express app, middleware and routes
+│   │   ├── config/db.js               # MySQL connection pool
+│   │   ├── middleware/                # Authentication and error handling
+│   │   ├── routes/                    # Auth, jobs and applications routes
+│   │   └── controllers/               # Auth, job and application logic
+│   └── tests/
+│       ├── step3_backend.test.js
+│       ├── step4_backend.test.js
+│       ├── step5_integration.test.js
+│       ├── step6_backend.test.js
+│       └── step7_backend.test.js
+└── frontend/
+    ├── index.html
     ├── pages/
-    │   ├── login.html         # User sign-in
-    │   ├── register.html      # User registration
-    │   ├── student/
-    │   │   ├── dashboard.html # Job browsing & quick stats
-    │   │   └── my-applications.html # Application status tracking table
-    │   └── company/
-    │       ├── dashboard.html # Company metrics & active job list
-    │       ├── post-job.html  # Create job posting form
-    │       └── applicants.html# Candidate review & shortlisting table
+    │   ├── login.html
+    │   ├── register.html
+    │   └── dashboard.html
     └── assets/
-        ├── css/
-        │   └── style.css      # Core stylesheet and design tokens
+        ├── css/style.css
         └── js/
-            ├── core/
-            │   ├── config.js  # Centralized API base URL config
-            │   ├── api.js     # Unified fetch wrapper with auth header injection
-            │   ├── auth.js    # Session storage, auth guards, logout handler
-            │   └── theme.js   # Dark mode toggle & state management
-            └── pages/
-                ├── login.js
-                ├── register.js
-                ├── student-dashboard.js
-                ├── student-applications.js
-                ├── company-dashboard.js
-                ├── company-post-job.js
-                └── company-applicants.js
+            ├── core/core.js           # API base URL, auth/session, escaping, theme, toast
+            └── pages/                 # Authentication and role-aware dashboard logic
 ```
 
----
+## Prerequisites
 
-## ⚡ Quick Start Guide
+- Node.js 18 or later.
+- MySQL 8 or a compatible MariaDB installation.
+- MySQL Workbench or the MySQL command-line client.
+- A browser such as Chrome, Firefox, or Edge.
 
-### 1. Prerequisites
-- **Node.js** (v18.x or later)
-- **MySQL Server** (v8.x or MariaDB)
+## Local setup
 
-### 2. Database Setup
-Log into your MySQL client and run the initialization scripts:
+Run commands from the repository root unless the step says otherwise.
+
+### 1. Create the database
+
+For a **fresh local installation**, create the latest schema:
 
 ```bash
-# 1. Create the database and tables
 mysql -u root -p < database/schema.sql
-
-# 2. Seed initial demo users and test jobs
-mysql -u root -p < database/seed.sql
 ```
 
-> **Demo Seed Accounts (Password: `Test@1234`):**
-> - **Company:** `techcorp@example.com`
-> - **Student 1:** `alice@example.com`
-> - **Student 2:** `bob@example.com`
+Then, if you want the demo users and sample data, run the seed scripts:
 
----
-
-### 3. Backend Setup
-
-1. Navigate to the backend folder:
-   ```bash
-   cd backend
-   ```
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Configure your environment:
-   ```bash
-   cp .env.example .env
-   ```
-   Update `.env` with your MySQL credentials:
-   ```env
-   DB_HOST=localhost
-   DB_USER=root
-   DB_PASSWORD=your_mysql_password
-   DB_NAME=placement_portal
-   JWT_SECRET=your_jwt_secret_key_here
-   PORT=5000
-   ALLOWED_ORIGINS=http://localhost:5500,http://127.0.0.1:5500,http://localhost:3000
-   ```
-4. Start the server:
-   ```bash
-   # Development mode with hot-reloading:
-   npm run dev
-
-   # Or standard production mode:
-   npm start
-   ```
-   The backend will be live at `http://localhost:5000`.
-
----
-
-### 4. Frontend Access
-
-Open the `frontend` folder using any static file server:
-- **VS Code Live Server:** Right-click `frontend/index.html` → *Open with Live Server* (port 5500).
-- **Node `serve` / `http-server`:**
-  ```bash
-  npx serve frontend -p 5500
-  ```
-- Browse to `http://localhost:5500`.
-
----
-
-## 📚 API Reference
-
-See [`docs/api.md`](docs/api.md) for full endpoint specifications, request payloads, and status codes.
-
----
-
-## 🔒 Security Best Practices Implemented
-
-- **Password Hashing:** Passwords hashed with `bcrypt` (salt rounds: 10).
-- **Protected Endpoints:** Strict JWT verification and role-based checks (`student` vs `company`).
-- **Resource Ownership Authorization:** Only the company that published a job can view applicants, delete the job, or modify application status.
-- **SQL Injection Prevention:** 100% parameterized queries using `mysql2/promise`.
-- **Duplicate Prevention:** Database `UNIQUE(job_id, student_id)` constraint prevents multi-apply race conditions.
-- **CORS Protection:** Configurable origin allowlisting in Express.
-=======
-# 🎓 Campus Placement Portal  
-
-A full-stack web application designed to simplify campus recruitment for both students and companies. It enables companies to post job openings and manage applicants, while students can explore opportunities and apply through a single platform.
-
----
-
-## 🚀 Features  
-
-- Secure authentication using JWT  
-- Role-based access (Student / Company)  
-- Job posting and management for companies  
-- Job browsing and application system for students  
-- Clean and responsive user interface  
-- Dark mode support  
-
----
-
-## 🛠 Tech Stack  
-
-- **Backend:** Node.js, Express.js  
-- **Database:** MySQL  
-- **Frontend:** HTML, CSS, JavaScript  
-- **Authentication:** JWT  
-
----
-
-## ⚙️ Setup Instructions  
-
-1. Clone the repository  
 ```bash
-git clone https://github.com/23sar/placement-portal.git
+mysql -u root -p placement_portal < database/seed.sql
+mysql -u root -p placement_portal < database/seed_admin_dev.sql
 ```
-2. Navigate to server directory
+
+You can also execute these SQL files through MySQL Workbench. The `seed_admin_dev.sql` script is for local development and QA only; **do not use its development credentials in a deployed environment**.
+
+> **Existing database warning:** Do not rerun the schema or all migrations blindly against a database that already contains data. Inspect its current schema and determine which migrations have already been applied. Migrations 003 and 004 change existing tables and are not intended to be run repeatedly. Back up the database before applying a migration.
+
+### 2. Configure the backend
+
 ```bash
-cd placement-portal/server
-```
-3. Install dependencies
-```bash
+cd backend
 npm install
 ```
-4. Start the server
+
+Create a local environment file from the template. In Git Bash on Windows:
+
 ```bash
-node server.js
+cp .env.example .env
 ```
-# 📌 Project Overview
 
-This project was built to gain hands-on experience with real-world system design, backend development, authentication, and database integration. It focuses on building a scalable and structured solution for managing campus placements efficiently.
+Edit `backend/.env` with your local MySQL credentials and a unique, random JWT secret:
 
-# 🔮 Future Improvements
-- Resume upload and parsing
-- Admin dashboard
-- Email notifications
-- Advanced filtering and search
-- Deployment and cloud integration
+```dotenv
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=your_mysql_password
+DB_NAME=placement_portal
+JWT_SECRET=replace_with_a_long_random_secret
+PORT=5000
+ALLOWED_ORIGINS=http://localhost:5500,http://127.0.0.1:5500,http://localhost:3000
+```
+
+Do not commit `.env` or share its contents. The repository includes `.env.example` as a placeholder-based template.
+
+### 3. Start the backend
+
+From `backend/`:
+
+```bash
+npm run dev
+```
+
+`npm run dev` uses Nodemon for development auto-restarts. Alternatively, run the server without auto-restarting:
+
+```bash
+npm start
+```
+
+The API defaults to `http://localhost:5000`. The root endpoint can be used as a basic health check:
+
+```text
+http://localhost:5000/
+```
+
+It should return a small JSON status response when the server is running.
+
+### 4. Start the frontend
+
+Open a **second terminal** and run a static file server from the frontend directory. For example, using Python:
+
+```bash
+cd frontend
+py -m http.server 5500
+```
+
+Open [http://localhost:5500](http://localhost:5500). You can alternatively use VS Code Live Server on port 5500.
+
+The frontend's API base URL is configured in `frontend/assets/js/core/core.js`. If you change the backend host or port, update that setting and the `ALLOWED_ORIGINS` environment variable to match the frontend origin.
+
+## Local demo accounts
+
+The demo seed data documents the following student/company credentials for local testing:
+
+| Role | Email | Password |
+|---|---|---|
+| Company | `techcorp@example.com` | `Test@1234` |
+| Student | `alice@example.com` | `Test@1234` |
+| Student | `bob@example.com` | `Test@1234` |
+
+The development administrator is created by `database/seed_admin_dev.sql`. That script contains its local-only credentials and warns against use outside development/QA. Do not use demo accounts or default credentials for a real deployment.
+
+## Automated tests
+
+Run tests from the `backend/` directory. Each suite provisions its own isolated test database; do not change the test configuration to target a development or production database.
+
+```bash
+npm test                 # Step 4 approval/lifecycle tests and baseline regressions
+npm run test:step3       # Job creation and publication rules
+npm run test:step5       # Admin dashboard integration
+npm run test:step6       # Job editing, resubmission and application retention
+npm run test:step7       # Stale approvals and strict input validation
+```
+
+The suites cover role authorization, job creation, approval/rejection, revision-aware reviews, editing and resubmission, dashboard data, input validation, application duplication, and protection of application history. Run the commands and inspect the output to verify the current checkout; historical test results do not guarantee future changes will pass.
+
+## Database migrations
+
+Migration files are numbered in execution order for existing databases:
+
+1. `001_job_approval_workflow.sql` — job source and approval workflow schema.
+2. `002_approval_review_audit.sql` — review metadata and audit fields.
+3. `003_restrict_application_deletion.sql` — restricts deleting jobs referenced by applications.
+4. `004_add_job_revision.sql` — adds the revision counter used to detect stale approval actions.
+
+The current `database/schema.sql` represents a fresh-install schema and includes the job revision field and restrictive application foreign key. For an existing database, inspect its columns and foreign-key rules first, back it up, and apply only migrations that are still needed. Do not rerun migration 003 if `fk_app_job` already uses `ON DELETE RESTRICT`, or migration 004 if `jobs.revision` already exists.
+
+## API documentation
+
+See [`docs/api.md`](docs/api.md) for the REST endpoints and request/response details. Key route groups include:
+
+- `/api/auth` — registration and login.
+- `/api/jobs` — browsing, creating, editing, reviewing, closing/reopening, and deleting job postings subject to role and retention rules.
+- `/api/applications` — application dashboard data and related application operations.
+
+## Security and operational notes
+
+- Passwords are stored as bcrypt hashes.
+- JWT authentication and backend role checks protect restricted routes.
+- Company ownership and Placement Cell posting-source rules are checked server-side.
+- SQL operations use parameterized queries in the application code.
+- A database uniqueness constraint prevents duplicate applications to the same job.
+- Revision-aware approval requests help prevent a stale review from approving a newer job version.
+- Jobs with application history are protected from permanent deletion both at the API layer and by the database foreign key.
+- CORS is configured through `ALLOWED_ORIGINS`.
+- Keep secrets out of Git; rotate credentials immediately if they are exposed.
+
+Before deploying, configure production credentials and CORS explicitly, use HTTPS, review logging/error handling and operational monitoring, provision administrator accounts securely, and test the target deployment environment. The local automated suites are important checks but are not, by themselves, a production-readiness certification.
+
+## Project goal
+
+This project demonstrates full-stack development, relational data modeling, role-based access control, moderation workflows, auditability, concurrency-aware updates, and careful retention of student application history in a campus recruitment setting.
