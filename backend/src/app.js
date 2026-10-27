@@ -41,6 +41,7 @@ app.use('/api/jobs',         jobRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/profile',      profileRoutes);
 app.use('/api/profile/resume', resumeRoutes);
+app.use('/api/profile/resumes', resumeRoutes);
 app.use('/api/announcements',  announcementRoutes);
 
 // Health-check

@@ -87,3 +87,9 @@ form.box{background:var(--surface);border:1px solid var(--line);border-radius:va
 .ann-badge-read{color:var(--muted);font-size:.8rem}
 .ann-foot{display:flex;justify-content:space-between;align-items:center;gap:.8rem;margin-top:.4rem;padding-top:.7rem;border-top:1px solid var(--line);flex-wrap:wrap}
 .ann-status-row{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+
+/* Apply modal & resume library enhancements */
+.apply-modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(4px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem}
+.apply-modal-box{background:var(--card);border:1px solid var(--line);border-radius:var(--r-m);width:100%;max-width:520px;padding:1.5rem;box-shadow:0 12px 32px rgba(0,0,0,0.35)}
+.resume-card{transition:border-color .15s}
+.resume-card:hover{border-color:color-mix(in srgb,var(--brand) 40%,var(--line))}

@@ -1,19 +1,24 @@
-const { Router } = require('express');
+﻿const { Router } = require('express');
 const multer = require('multer');
 const { verifyToken, checkRole } = require('../middleware/auth');
 const {
   getCurrentResume,
-  uploadCurrentResume,
+  getStudentResumes,
+  uploadResume,
   downloadCurrentResume,
   downloadApplicantResume,
   deleteCurrentResume,
+  downloadResumeById,
+  updateResumeLabel,
+  setDefaultResume,
+  deleteResume,
 } = require('../controllers/resumeController');
 
 const router = Router();
 const maxBytes = 5 * 1024 * 1024;
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: maxBytes, files: 1, fields: 0 },
+  limits: { fileSize: maxBytes, files: 1, fields: 10 },
   fileFilter(_req, file, cb) {
     const ext = require('path').extname(file.originalname || '').toLowerCase();
     if (ext !== '.pdf' || file.mimetype !== 'application/pdf') {
@@ -40,10 +45,16 @@ function parseUpload(req, res, next) {
 
 // Every operation is tied to the authenticated student ID. No public file URL
 // or client-supplied user ID/storage path is accepted by these endpoints.
-router.get('/', verifyToken, checkRole('student'), getCurrentResume);
-router.post('/', verifyToken, checkRole('student'), parseUpload, uploadCurrentResume);
+router.get('/', verifyToken, checkRole('student'), getStudentResumes);
+router.post('/', verifyToken, checkRole('student'), parseUpload, uploadResume);
 router.get('/download', verifyToken, checkRole('student'), downloadCurrentResume);
 router.get('/students/:studentId/download', verifyToken, checkRole('student', 'company', 'admin'), downloadApplicantResume);
 router.delete('/', verifyToken, checkRole('student'), deleteCurrentResume);
+
+// Multiple saved resume management per student
+router.get('/:id/download', verifyToken, checkRole('student'), downloadResumeById);
+router.patch('/:id/default', verifyToken, checkRole('student'), setDefaultResume);
+router.patch('/:id', verifyToken, checkRole('student'), updateResumeLabel);
+router.delete('/:id', verifyToken, checkRole('student'), deleteResume);
 
 module.exports = router;

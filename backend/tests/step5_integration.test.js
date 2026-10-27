@@ -20,10 +20,20 @@
 
 const path = require('path');
 const fs   = require('fs');
+const os   = require('os');
+const crypto = require('crypto');
+const assert = require('node:assert/strict');
+
+// Ensure console.assert failures throw AssertionError and cause test failure
+console.assert = (condition, ...args) => {
+  assert.ok(condition, args.map(a => (typeof a === 'object' && a !== null ? JSON.stringify(a) : String(a))).join(' '));
+};
 
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 const TEST_DB = 'placement_portal_test_step5';
+const TEST_STORAGE = path.join(os.tmpdir(), `placement-portal-step5-storage-${process.pid}`);
 process.env.DB_NAME = TEST_DB;
+process.env.RESUME_STORAGE_DIR = TEST_STORAGE;
 
 const mysql = require('mysql2/promise');
 
@@ -38,17 +48,18 @@ async function main() {
   console.log('   Step 5: Placement Cell Admin Dashboard Integration Suite    ');
   console.log('===============================================================');
 
-  const adminConn = await mysql.createConnection({
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD,
-    multipleStatements: true,
-  });
-
+  let adminConn;
   let server;
+  let pool;
   let baseUrl;
 
   try {
+    adminConn = await mysql.createConnection({
+      host: process.env.DB_HOST || 'localhost',
+      user: process.env.DB_USER || 'root',
+      password: process.env.DB_PASSWORD,
+      multipleStatements: true,
+    });
     console.log(`\n[Setup] Provisioning test database '${TEST_DB}'...`);
     await adminConn.query(`DROP DATABASE IF EXISTS \`${TEST_DB}\`;`);
     await adminConn.query(`CREATE DATABASE \`${TEST_DB}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
@@ -80,7 +91,18 @@ async function main() {
 
     console.log('        Schema and test accounts provisioned.');
 
+    await fs.promises.mkdir(TEST_STORAGE, { recursive: true });
+    const sampleResumeKey = '11111111-1111-4111-8111-111111111111.pdf';
+    const samplePdfBytes = Buffer.from('%PDF-1.7\nAlice Test Resume\n%%EOF\n');
+    const sampleHash = crypto.createHash('sha256').update(samplePdfBytes).digest('hex');
+    await fs.promises.writeFile(path.join(TEST_STORAGE, sampleResumeKey), samplePdfBytes);
+    await adminConn.query(`
+      INSERT INTO student_resumes (user_id, label, original_name, storage_key, mime_type, file_size, sha256, is_default)
+      VALUES (2, 'Default Resume', 'alice_resume.pdf', ?, 'application/pdf', ?, ?, TRUE)
+    `, [sampleResumeKey, samplePdfBytes.length, sampleHash]);
+
     const app = require('../src/app');
+    pool = require('../src/config/db');
     await new Promise((resolve) => {
       server = app.listen(0, () => {
         const port = server.address().port;
@@ -354,19 +376,68 @@ async function main() {
     console.log('  ✨ ALL 13 STEP 5 INTEGRATION SCENARIOS PASSED SUCCESSFULLY!   ');
     console.log('===============================================================');
 
+  } catch (err) {
+    console.error('\n❌ STEP 5 TEST RUNNER ENCOUNTERED AN ERROR:');
+    console.error(err);
+    process.exitCode = 1;
   } finally {
-    if (server) {
-      server.close();
+    try {
+      if (server) {
+        if (typeof server.closeIdleConnections === 'function') {
+          server.closeIdleConnections();
+        }
+        if (typeof server.closeAllConnections === 'function') {
+          server.closeAllConnections();
+        }
+        await new Promise((resolve) => server.close(resolve));
+      }
+    } catch (e) {
+      console.error('[Cleanup Error] Server shutdown failed:', e.message);
+      process.exitCode = process.exitCode || 1;
+    } finally {
+      try {
+        if (pool) {
+          await new Promise((resolve) => pool.end(resolve));
+        }
+      } catch (e) {
+        console.error('[Cleanup Error] Pool close failed:', e.message);
+        process.exitCode = process.exitCode || 1;
+      } finally {
+        try {
+          if (adminConn) {
+            console.log(`\n[Cleanup] Dropping isolated test database '${TEST_DB}'...`);
+            await adminConn.query(`DROP DATABASE IF EXISTS \`${TEST_DB}\`;`);
+            console.log('[Cleanup] Test database dropped cleanly.');
+          }
+        } catch (e) {
+          console.error('[Cleanup Error] Dropping test database failed:', e.message);
+          process.exitCode = process.exitCode || 1;
+        } finally {
+          try {
+            if (adminConn) {
+              await adminConn.end();
+            }
+          } catch (e) {
+            console.error('[Cleanup Error] Closing admin connection failed:', e.message);
+            process.exitCode = process.exitCode || 1;
+          } finally {
+            try {
+              if (fs.existsSync(TEST_STORAGE)) {
+                await fs.promises.rm(TEST_STORAGE, { recursive: true, force: true });
+                console.log('[Cleanup] Cleaned up temporary test storage directory.');
+              }
+            } catch (e) {
+              console.error('[Cleanup Error] Resume storage cleanup failed:', e.message);
+              process.exitCode = process.exitCode || 1;
+            }
+          }
+        }
+      }
     }
-    console.log(`\n[Cleanup] Dropping isolated test database '${TEST_DB}'...`);
-    await adminConn.query(`DROP DATABASE IF EXISTS \`${TEST_DB}\`;`);
-    await adminConn.end();
-    console.log('[Cleanup] Test database dropped cleanly.');
-    process.exit(0);
   }
 }
 
 main().catch((err) => {
-  console.error('\n❌ Integration Test Suite Failed:', err);
-  process.exit(1);
+  console.error('\n❌ Fatal error in test runner:', err);
+  process.exitCode = 1;
 });

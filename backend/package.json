@@ -1,7 +1,7 @@
 {
   "name": "placement-portal-backend",
   "version": "1.0.0",
-  "description": "Campus Placement Portal \u2014 Express/MySQL API",
+  "description": "Campus Placement Portal — Express/MySQL API",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
@@ -16,7 +16,8 @@
     "test:step8-details": "node tests/step8_profile_details.test.js",
     "test:step8-announcements": "node tests/step8_announcements_api.test.js",
     "test:step8-read-tracking": "node tests/step8_announcements_read_tracking.test.js",
-    "test:step8": "npm run test:step8-profile && npm run test:step8-details && npm run test:step8-resume && npm run test:step8-announcements && npm run test:step8-read-tracking"
+    "test:step8": "npm run test:step8-profile && npm run test:step8-details && npm run test:step8-resume && npm run test:step8-announcements && npm run test:step8-read-tracking",
+    "test:step9": "node tests/step9_multiple_resumes_application.test.js"
   },
   "keywords": [
     "placement",
