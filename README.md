@@ -1,41 +1,52 @@
 # Campus Placement Portal
 
-A full-stack campus recruitment management application for students, recruiting companies, and a college Placement Cell administrator. The portal manages job posting, approval, applications, candidate review, and application-history retention through a role-aware web interface and an Express/MySQL API.
+A full-stack campus recruitment management application for students, recruiting companies, and a college Placement Cell administrator. The portal supports job posting and approval, applications and candidate review, student profile and resume management, and moderated placement announcements with persistent student read/unread tracking.
 
-> **Project status:** The core workflows and automated regression suites have been implemented and tested locally. Complete browser-based acceptance testing and deployment-specific hardening should be performed before using the system for real college recruitment. This README does not claim the application is production-ready.
+> **Project status:** The major application workflows and automated regression suites have been implemented. Complete browser-based acceptance testing and deployment-specific hardening should be performed before using the system for real college recruitment. Passing local tests alone does not certify production readiness.
 
 ## Features
 
 ### Students
 - Register and sign in using JWT-based authentication.
 - Browse jobs that have been approved, are open, and have not passed their application deadline.
-- Apply to eligible jobs and view application history/status.
-- Duplicate applications are prevented at the database level.
-- View a role-specific dashboard and application metrics.
+- Apply to eligible jobs and view application history/status. Duplicate applications are prevented at the database level.
+- Maintain a student profile with academic/contact details, technical interests, and GitHub, LinkedIn, and portfolio links.
+- Manage structured profile sections for skills, projects, internships/experience, and achievements/certifications.
+- View a profile-completion indicator based on profile information.
+- Upload, download, replace, and delete a PDF resume. Resume files are stored outside the public frontend and served through authenticated endpoints.
+- Read published placement announcements in **What's Going On?**. Pending and rejected company announcements are not shown to students.
+- Track unread announcements using a sidebar count; mark an individual announcement or all published announcements as read. Read state is persisted independently for each student.
+- Use a role-specific dashboard and application metrics.
 
 ### Companies
 - Create job postings, which enter the Placement Cell approval queue.
 - View their own postings and approval status.
-- Edit their own company-created jobs. A substantive edit returns the posting to **Pending Approval** and clears the previous rejection/review metadata as appropriate.
+- Edit their own company-created jobs. A substantive edit returns the posting to **Pending Approval** and clears previous rejection/review metadata as appropriate.
 - See rejection reasons and resubmit corrected postings for review.
 - View applicants for postings they are authorized to manage and update candidate decisions using the existing application workflow.
 - Close or reopen eligible company-owned postings.
-- Cannot edit or delete Placement Cell-managed postings, even when associated with a company account for applicant review.
+- Submit placement announcements for Placement Cell review and track Pending, Approved, or Rejected status.
+- View rejection feedback and delete only their own announcements, subject to backend authorization rules.
+- Cannot edit or delete Placement Cell-managed job postings, approve their own announcements, or publish a pending announcement directly.
 
 ### Placement Cell administrators
 - View dashboard metrics and the pending company-job approval queue.
-- Approve or reject company postings; a meaningful rejection reason is required.
+- Approve or reject company job postings; a meaningful rejection reason is required.
 - Publish jobs directly for external organizations or registered companies without sending Placement Cell-created postings through the company approval queue.
 - View and filter all job postings, including posting source, approval state, availability, creator/reviewer metadata, and application counts.
-- Edit Placement Cell-created postings while preserving their creator attribution and posting source.
+- Edit Placement Cell-created postings while preserving creator attribution and posting source.
 - Manage job availability and review applicants within the existing permission rules.
-- Use revision-aware review requests to reject stale approval/rejection actions when the posting has changed since it was reviewed.
+- Use revision-aware review requests to reject stale job approval/rejection actions.
+- Create and publish Placement Cell announcements immediately.
+- Review company announcement submissions, approve or reject them with a reason, and view announcement management information.
 
 ### Application history and data integrity
 - Jobs with existing applications cannot be permanently deleted through the application; the API returns **HTTP 409 Conflict** and advises the authorized user to close the job instead.
 - The `applications.job_id` foreign key uses `ON DELETE RESTRICT` in the current schema, helping prevent accidental loss of application history.
 - Editing or resubmitting a job preserves its ID and existing applications.
 - User accounts associated with historical records are intended to be deactivated rather than physically deleted.
+- Announcement approval uses revision-aware, transaction-based review checks to reject stale or repeated review requests.
+- Student announcement read state is stored per student, not globally on an announcement.
 
 ## Technology stack
 
@@ -45,7 +56,9 @@ A full-stack campus recruitment management application for students, recruiting 
 | Database | MySQL with InnoDB foreign keys, indexes, and constraints |
 | Authentication | JSON Web Tokens (`jsonwebtoken`) and `bcrypt` password hashing |
 | Frontend | HTML, CSS, Vanilla JavaScript, Fetch API |
-| Other | `mysql2`, `dotenv`, Express CORS middleware |
+| Database driver/configuration | `mysql2`, `dotenv`, Express CORS middleware |
+| Resume storage | Private filesystem storage by default, configurable using `RESUME_STORAGE_DIR` |
+| Testing | Node.js test scripts using isolated temporary MySQL databases |
 
 ## Repository layout
 
@@ -53,33 +66,43 @@ A full-stack campus recruitment management application for students, recruiting 
 placement-portal/
 ├── README.md
 ├── docs/
-│   └── api.md                         # API reference
+│   └── api.md
 ├── database/
 │   ├── schema.sql                     # Fresh-install schema
 │   ├── seed.sql                       # Local demo users/data
 │   ├── seed_admin_dev.sql             # Development-only admin seed
-│   ├── verify_migration.js            # Migration verification utility
 │   └── migrations/
 │       ├── 001_job_approval_workflow.sql
 │       ├── 002_approval_review_audit.sql
 │       ├── 003_restrict_application_deletion.sql
-│       └── 004_add_job_revision.sql
+│       ├── 004_add_job_revision.sql
+│       ├── 005_create_student_profiles.sql
+│       ├── 006_student_profile_details.sql
+│       ├── 007_create_student_resumes.sql
+│       ├── 008_create_announcements.sql
+│       └── 009_create_announcement_reads.sql
 ├── backend/
-│   ├── .env.example                   # Environment template; safe to commit
+│   ├── .env.example
 │   ├── package.json
 │   ├── src/
-│   │   ├── server.js                  # Server entry point
-│   │   ├── app.js                     # Express app, middleware and routes
-│   │   ├── config/db.js               # MySQL connection pool
-│   │   ├── middleware/                # Authentication and error handling
-│   │   ├── routes/                    # Auth, jobs and applications routes
-│   │   └── controllers/               # Auth, job and application logic
+│   │   ├── server.js
+│   │   ├── app.js
+│   │   ├── config/db.js
+│   │   ├── middleware/
+│   │   ├── routes/                    # Auth, jobs, applications, profile, resume, announcements
+│   │   └── controllers/               # Auth, jobs, applications, profiles, resumes, announcements
+│   ├── storage/resumes/               # Private resume files; do not commit or serve publicly
 │   └── tests/
 │       ├── step3_backend.test.js
 │       ├── step4_backend.test.js
 │       ├── step5_integration.test.js
 │       ├── step6_backend.test.js
-│       └── step7_backend.test.js
+│       ├── step7_backend.test.js
+│       ├── step8_profile_api.test.js
+│       ├── step8_profile_details.test.js
+│       ├── step8_resume_api.test.js
+│       ├── step8_announcements_api.test.js
+│       └── step8_announcements_read_tracking.test.js
 └── frontend/
     ├── index.html
     ├── pages/
@@ -89,8 +112,8 @@ placement-portal/
     └── assets/
         ├── css/style.css
         └── js/
-            ├── core/core.js           # API base URL, auth/session, escaping, theme, toast
-            └── pages/                 # Authentication and role-aware dashboard logic
+            ├── core/core.js
+            └── pages/dashboard.js
 ```
 
 ## Prerequisites
@@ -104,7 +127,7 @@ placement-portal/
 
 Run commands from the repository root unless the step says otherwise.
 
-### 1. Create the database
+### 1. Create the database (fresh installation only)
 
 For a **fresh local installation**, create the latest schema:
 
@@ -112,16 +135,16 @@ For a **fresh local installation**, create the latest schema:
 mysql -u root -p < database/schema.sql
 ```
 
-Then, if you want the demo users and sample data, run the seed scripts:
+Then, if you want demo users and sample data, run the seed scripts:
 
 ```bash
 mysql -u root -p placement_portal < database/seed.sql
 mysql -u root -p placement_portal < database/seed_admin_dev.sql
 ```
 
-You can also execute these SQL files through MySQL Workbench. The `seed_admin_dev.sql` script is for local development and QA only; **do not use its development credentials in a deployed environment**.
+You can also execute SQL files in MySQL Workbench. The `seed_admin_dev.sql` script is for local development and QA only; **do not use its development credentials in a deployed environment**.
 
-> **Existing database warning:** Do not rerun the schema or all migrations blindly against a database that already contains data. Inspect its current schema and determine which migrations have already been applied. Migrations 003 and 004 change existing tables and are not intended to be run repeatedly. Back up the database before applying a migration.
+> **Existing database warning:** Do not rerun the schema, drop tables, or run every migration blindly against a database that already contains data. Inspect its current schema, back it up, and apply only migrations that are still needed. Some earlier migrations alter existing tables and are not intended to be blindly repeated.
 
 ### 2. Configure the backend
 
@@ -148,7 +171,9 @@ PORT=5000
 ALLOWED_ORIGINS=http://localhost:5500,http://127.0.0.1:5500,http://localhost:3000
 ```
 
-Do not commit `.env` or share its contents. The repository includes `.env.example` as a placeholder-based template.
+Do not commit `.env` or share its contents. `.env.example` should contain placeholders only.
+
+Resume PDFs are stored privately by default under `backend/storage/resumes/`. This directory is ignored by Git and must not be exposed as a public static directory. To use a dedicated private disk or persistent volume, set `RESUME_STORAGE_DIR` to an absolute directory that is writable by the backend process and not publicly served.
 
 ### 3. Start the backend
 
@@ -158,7 +183,7 @@ From `backend/`:
 npm run dev
 ```
 
-`npm run dev` uses Nodemon for development auto-restarts. Alternatively, run the server without auto-restarting:
+`npm run dev` uses Nodemon for development auto-restarts. Alternatively, start the server without auto-restarting:
 
 ```bash
 npm start
@@ -169,8 +194,6 @@ The API defaults to `http://localhost:5000`. The root endpoint can be used as a 
 ```text
 http://localhost:5000/
 ```
-
-It should return a small JSON status response when the server is running.
 
 ### 4. Start the frontend
 
@@ -183,7 +206,7 @@ py -m http.server 5500
 
 Open [http://localhost:5500](http://localhost:5500). You can alternatively use VS Code Live Server on port 5500.
 
-The frontend's API base URL is configured in `frontend/assets/js/core/core.js`. If you change the backend host or port, update that setting and the `ALLOWED_ORIGINS` environment variable to match the frontend origin.
+The frontend API base URL is configured in `frontend/assets/js/core/core.js`. If you change the backend host or port, update that setting and `ALLOWED_ORIGINS` to match the frontend origin.
 
 ## Local demo accounts
 
@@ -195,21 +218,27 @@ The demo seed data documents the following student/company credentials for local
 | Student | `alice@example.com` | `Test@1234` |
 | Student | `bob@example.com` | `Test@1234` |
 
-The development administrator is created by `database/seed_admin_dev.sql`. That script contains its local-only credentials and warns against use outside development/QA. Do not use demo accounts or default credentials for a real deployment.
+The development administrator is created by `database/seed_admin_dev.sql`. That script contains local-only credentials and warns against use outside development/QA. Do not use demo accounts or default credentials for a real deployment.
 
 ## Automated tests
 
-Run tests from the `backend/` directory. Each suite provisions its own isolated test database; do not change the test configuration to target a development or production database.
+Run tests from the `backend/` directory. The suites provision isolated temporary test databases; they must not be configured to target the development or production database.
 
 ```bash
-npm test                 # Step 4 approval/lifecycle tests and baseline regressions
-npm run test:step3       # Job creation and publication rules
-npm run test:step5       # Admin dashboard integration
-npm run test:step6       # Job editing, resubmission and application retention
-npm run test:step7       # Stale approvals and strict input validation
+npm test                              # Step 4 approval/lifecycle tests and Step 3 baseline scenarios
+npm run test:step3                    # Job creation and publication rules
+npm run test:step5                    # Admin dashboard integration
+npm run test:step6                    # Job editing, resubmission and application retention
+npm run test:step7                    # Stale approvals and strict job input validation
+npm run test:step8-profile            # Core student profile API
+npm run test:step8-details            # Skills, projects, internships and achievements
+npm run test:step8-resume             # Private PDF resume API
+npm run test:step8-announcements      # Company announcement and admin approval workflow
+npm run test:step8-read-tracking      # Student-specific announcement read/unread state
+npm run test:step8                    # All Step 8 test suites
 ```
 
-The suites cover role authorization, job creation, approval/rejection, revision-aware reviews, editing and resubmission, dashboard data, input validation, application duplication, and protection of application history. Run the commands and inspect the output to verify the current checkout; historical test results do not guarantee future changes will pass.
+The suites cover authorization, student profile ownership, profile data validation, resume file validation and access, announcement submission/review, stale review protection, student-specific read tracking, and regression protection for existing job/application workflows. Run the commands and inspect their output to verify the current checkout; historical test results do not guarantee future changes will pass.
 
 ## Database migrations
 
@@ -218,32 +247,47 @@ Migration files are numbered in execution order for existing databases:
 1. `001_job_approval_workflow.sql` — job source and approval workflow schema.
 2. `002_approval_review_audit.sql` — review metadata and audit fields.
 3. `003_restrict_application_deletion.sql` — restricts deleting jobs referenced by applications.
-4. `004_add_job_revision.sql` — adds the revision counter used to detect stale approval actions.
+4. `004_add_job_revision.sql` — adds the revision counter used to detect stale job approval actions.
+5. `005_create_student_profiles.sql` — core student profile table.
+6. `006_student_profile_details.sql` — skills, projects, internships and achievements tables.
+7. `007_create_student_resumes.sql` — resume metadata table; PDF bytes are stored separately in private filesystem storage.
+8. `008_create_announcements.sql` — announcement creation, publishing, and approval/rejection workflow.
+9. `009_create_announcement_reads.sql` — per-student persistent announcement read tracking.
 
-The current `database/schema.sql` represents a fresh-install schema and includes the job revision field and restrictive application foreign key. For an existing database, inspect its columns and foreign-key rules first, back it up, and apply only migrations that are still needed. Do not rerun migration 003 if `fk_app_job` already uses `ON DELETE RESTRICT`, or migration 004 if `jobs.revision` already exists.
+`database/schema.sql` is the fresh-install schema and should contain the current table definitions, including these Step 8 tables. For an existing database, inspect which tables/columns already exist and apply only the missing migrations in order. In particular, migration 009 depends on the `announcements` table from migration 008. Do not rerun a migration merely because a test database was created; test suites provision their own isolated schemas.
 
-## API documentation
+You may apply migration files with MySQL Workbench. If using the MySQL CLI, run commands from the repository root with the appropriate database credentials and confirm the target database before applying a migration. Back up important data first. Do not use `DROP DATABASE` as a migration strategy.
 
-See [`docs/api.md`](docs/api.md) for the REST endpoints and request/response details. Key route groups include:
+## API overview
+
+See [`docs/api.md`](docs/api.md) for the project's REST API documentation. Major route groups include:
 
 - `/api/auth` — registration and login.
-- `/api/jobs` — browsing, creating, editing, reviewing, closing/reopening, and deleting job postings subject to role and retention rules.
-- `/api/applications` — application dashboard data and related application operations.
+- `/api/jobs` — job browsing, creation, editing, approval/rejection, closing/reopening and deletion, subject to role and retention rules.
+- `/api/applications` — application operations and related dashboard information.
+- `/api/profile` — student core profile and structured profile details.
+- `/api/profile/resume` — authenticated resume metadata, upload, download and deletion operations.
+- `/api/announcements` — announcement feed, company submissions, administrator review, and placement-cell publishing.
+- `/api/announcements/unread-count`, `/api/announcements/:id/read`, and `/api/announcements/read-all` — authenticated student read/unread tracking.
+
+The backend's route definitions and controllers are the source of truth for current request/response details. Keep `docs/api.md` synchronized when the API contract changes.
 
 ## Security and operational notes
 
 - Passwords are stored as bcrypt hashes.
-- JWT authentication and backend role checks protect restricted routes.
-- Company ownership and Placement Cell posting-source rules are checked server-side.
-- SQL operations use parameterized queries in the application code.
+- JWT authentication and server-side role checks protect restricted routes.
+- Company ownership, Placement Cell posting-source rules, and student-specific read state are checked server-side.
+- SQL operations use parameterized queries in application code.
 - A database uniqueness constraint prevents duplicate applications to the same job.
-- Revision-aware approval requests help prevent a stale review from approving a newer job version.
-- Jobs with application history are protected from permanent deletion both at the API layer and by the database foreign key.
+- Revision-aware review requests help prevent stale approval/rejection actions.
+- Company announcements remain hidden from students until approved and published.
+- Resume uploads are PDF-only, size-limited, checked by the backend, and saved under private storage with generated storage keys. Downloads require authorization. Keep stored resume files out of Git and outside any public static directory.
+- Jobs with application history are protected from permanent deletion through API rules and the database foreign key.
 - CORS is configured through `ALLOWED_ORIGINS`.
 - Keep secrets out of Git; rotate credentials immediately if they are exposed.
 
-Before deploying, configure production credentials and CORS explicitly, use HTTPS, review logging/error handling and operational monitoring, provision administrator accounts securely, and test the target deployment environment. The local automated suites are important checks but are not, by themselves, a production-readiness certification.
+Before deploying, configure production credentials and CORS explicitly, use HTTPS, review logging and error handling, set up operational monitoring and backups, provision administrator accounts securely, and test the target deployment environment. The local automated suites are important checks but are not, by themselves, a production-readiness certification.
 
 ## Project goal
 
-This project demonstrates full-stack development, relational data modeling, role-based access control, moderation workflows, auditability, concurrency-aware updates, and careful retention of student application history in a campus recruitment setting.
+This project demonstrates full-stack development, relational data modeling, role-based access control, moderation and approval workflows, auditability, concurrency-aware updates, student profile and resume management, persistent notifications/read tracking, and careful retention of student application history in a campus recruitment setting.

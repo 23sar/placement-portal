@@ -37,6 +37,33 @@ CREATE TABLE IF NOT EXISTS users (
   INDEX idx_users_active (is_active)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- student_profiles ------------------------------------------------------------
+-- One private placement profile per student. Account identity (name/email/role)
+-- remains managed by the users table and cannot be changed through this API.
+CREATE TABLE IF NOT EXISTS student_profiles (
+  user_id             INT UNSIGNED PRIMARY KEY,
+  phone               VARCHAR(25)  NULL,
+  department          VARCHAR(100) NULL,
+  degree_program      VARCHAR(120) NULL,
+  graduation_year     SMALLINT UNSIGNED NULL,
+  roll_number         VARCHAR(50)  NULL,
+  cgpa                DECIMAL(4,2) NULL,
+  backlog_count       SMALLINT UNSIGNED NULL,
+  technical_interests TEXT         NULL,
+  github_url          VARCHAR(255) NULL,
+  linkedin_url        VARCHAR(255) NULL,
+  portfolio_url       VARCHAR(255) NULL,
+  created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                      ON UPDATE CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_student_profiles_user
+    FOREIGN KEY (user_id) REFERENCES users(id)
+    ON DELETE RESTRICT ON UPDATE CASCADE,
+
+  INDEX idx_student_profiles_department_year (department, graduation_year)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- jobs ------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS jobs (
   id                      INT UNSIGNED   AUTO_INCREMENT PRIMARY KEY,
@@ -108,4 +135,139 @@ CREATE TABLE IF NOT EXISTS applications (
 
   INDEX idx_app_student (student_id),
   INDEX idx_app_job     (job_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- student_skills --------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS student_skills (
+  id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id     INT UNSIGNED NOT NULL,
+  skill_name  VARCHAR(100) NOT NULL,
+  proficiency ENUM('beginner', 'intermediate', 'advanced', 'expert') NULL,
+  created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT uq_student_skill UNIQUE (user_id, skill_name),
+  CONSTRAINT fk_student_skills_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  INDEX idx_student_skills_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- student_projects ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS student_projects (
+  id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id      INT UNSIGNED NOT NULL,
+  title        VARCHAR(150) NOT NULL,
+  description  TEXT NOT NULL,
+  technologies VARCHAR(255) NULL,
+  project_url  VARCHAR(255) NULL,
+  start_date   DATE NULL,
+  end_date     DATE NULL,
+  created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_student_projects_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  INDEX idx_student_projects_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- student_internships ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS student_internships (
+  id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id        INT UNSIGNED NOT NULL,
+  organization   VARCHAR(150) NOT NULL,
+  role           VARCHAR(100) NOT NULL,
+  description    TEXT NULL,
+  start_date     DATE NULL,
+  end_date       DATE NULL,
+  experience_url VARCHAR(255) NULL,
+  created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_student_internships_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  INDEX idx_student_internships_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- student_achievements --------------------------------------------------------
+CREATE TABLE IF NOT EXISTS student_achievements (
+  id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id        INT UNSIGNED NOT NULL,
+  title          VARCHAR(150) NOT NULL,
+  issuer         VARCHAR(150) NULL,
+  description    TEXT NULL,
+  achieved_on    DATE NULL,
+  credential_url VARCHAR(255) NULL,
+  created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_student_achievements_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  INDEX idx_student_achievements_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- student_resumes -------------------------------------------------------------
+-- Metadata only: PDF bytes live in private backend storage, never in frontend.
+CREATE TABLE IF NOT EXISTS student_resumes (
+  id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id       INT UNSIGNED NOT NULL,
+  original_name VARCHAR(255) NOT NULL,
+  storage_key   VARCHAR(64) NOT NULL,
+  mime_type     VARCHAR(100) NOT NULL DEFAULT 'application/pdf',
+  file_size     INT UNSIGNED NOT NULL,
+  sha256        CHAR(64) NOT NULL,
+  created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT uq_student_resumes_user UNIQUE (user_id),
+  CONSTRAINT fk_student_resumes_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+  INDEX idx_student_resumes_updated (updated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- announcements ---------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS announcements (
+  id               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  title            VARCHAR(255) NOT NULL,
+  content          TEXT NOT NULL,
+  category         VARCHAR(100) NULL,
+  created_by       INT UNSIGNED NOT NULL,
+  posting_source   ENUM('company', 'placement_cell') NOT NULL DEFAULT 'company',
+  company_id       INT UNSIGNED NULL,
+  approval_status  ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
+  revision         INT UNSIGNED NOT NULL DEFAULT 1,
+  rejection_reason TEXT NULL,
+  reviewed_by      INT UNSIGNED NULL,
+  reviewed_at      DATETIME NULL,
+  published_at     DATETIME NULL,
+  created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_announcements_created_by
+    FOREIGN KEY (created_by) REFERENCES users(id)
+    ON DELETE RESTRICT ON UPDATE CASCADE,
+
+  CONSTRAINT fk_announcements_company
+    FOREIGN KEY (company_id) REFERENCES users(id)
+    ON DELETE RESTRICT ON UPDATE CASCADE,
+
+  CONSTRAINT fk_announcements_reviewed_by
+    FOREIGN KEY (reviewed_by) REFERENCES users(id)
+    ON DELETE SET NULL ON UPDATE CASCADE,
+
+  INDEX idx_announcements_created_by (created_by),
+  INDEX idx_announcements_company (company_id),
+  INDEX idx_announcements_reviewed_by (reviewed_by),
+  INDEX idx_announcements_approval_status (approval_status),
+  INDEX idx_announcements_listing (approval_status, published_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- announcement_reads ----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS announcement_reads (
+  id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id         INT UNSIGNED NOT NULL,
+  announcement_id INT UNSIGNED NOT NULL,
+  read_at         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT uq_announcement_user_read UNIQUE (user_id, announcement_id),
+  CONSTRAINT fk_announcement_reads_user
+    FOREIGN KEY (user_id) REFERENCES users(id)
+    ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT fk_announcement_reads_announcement
+    FOREIGN KEY (announcement_id) REFERENCES announcements(id)
+    ON DELETE CASCADE ON UPDATE CASCADE,
+
+  INDEX idx_announcement_reads_user (user_id),
+  INDEX idx_announcement_reads_announcement (announcement_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

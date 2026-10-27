@@ -11,10 +11,17 @@ const session = {
 };
 
 async function api(path, { method = 'GET', body } = {}) {
-  const headers = { 'Content-Type': 'application/json' };
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+  const headers = {};
+  // Let fetch set the multipart boundary for FormData uploads. JSON requests
+  // retain the existing API contract.
+  if (!isFormData) headers['Content-Type'] = 'application/json';
   if (session.token()) headers.Authorization = 'Bearer ' + session.token();
   let res;
-  try { res = await fetch(API_BASE + path, { method, headers, body: body && JSON.stringify(body) }); }
+  try { res = await fetch(API_BASE + path, {
+    method, headers,
+    body: body === undefined ? undefined : (isFormData ? body : JSON.stringify(body)),
+  }); }
   catch { throw new Error(`Can't reach the server at ${API_BASE}. Start the backend and check CORS settings.`); }
   const data = await res.json().catch(() => ({}));
   if (res.status === 401 && session.token()) { logout(); throw new Error('Session expired. Please sign in again.'); }

@@ -779,26 +779,478 @@ async function toggleApplicants(id, force) {
 }
 
 /* =============================================================================
+ * 4.5. ANNOUNCEMENTS (COMPANY, ADMIN & STUDENT FEED)
+ * ============================================================================= */
+let unreadAnnouncementsCount = 0;
+let studentAnnouncements = [];
+let studentAnnFilter = 'all';
+let adminAnnTab = 'pending';
+
+async function updateUnreadBadge() {
+  if (!isStudent) return;
+  try {
+    const res = await api('/api/announcements/unread-count');
+    unreadAnnouncementsCount = Number(res.unread_count || 0);
+    const badgeEl = $('.nav-badge');
+    const annBtn = $('[data-view="announcements"]');
+    if (annBtn) {
+      const label = "What's Going On?";
+      annBtn.innerHTML = unreadAnnouncementsCount > 0
+        ? `${label} <span class="nav-badge" aria-label="${unreadAnnouncementsCount} unread announcements">${unreadAnnouncementsCount}</span>`
+        : label;
+    }
+  } catch (err) {
+    console.warn('Unread count fetch error:', err.message);
+  }
+}
+
+// Company Announcements Management View
+async function viewCompanyAnnouncements(el) {
+  el.innerHTML = '<p class="muted">Loading announcements…</p>';
+  try {
+    const list = await api('/api/announcements/my');
+    el.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:1.5rem;">
+        <form id="form-co-ann" class="box" style="max-width:650px;">
+          <h3 style="margin-top:0;">Submit Announcement for Approval</h3>
+          <p class="help">Company announcements are reviewed and approved by the Placement Cell before publication to students.</p>
+
+          <label for="co-ann-t" style="margin-top:.8rem;">Title *</label>
+          <input id="co-ann-t" required minlength="3" maxlength="150" placeholder="e.g., TechCorp Campus Recruitment Drive 2026">
+
+          <label for="co-ann-cat" style="margin-top:.8rem;">Category (optional)</label>
+          <input id="co-ann-cat" maxlength="100" placeholder="e.g., Placement Drive, Pre-Placement Talk, Internship, Workshop">
+
+          <label for="co-ann-c" style="margin-top:.8rem;">Content *</label>
+          <textarea id="co-ann-c" rows="5" required minlength="10" maxlength="5000" placeholder="Provide full details of the announcement, schedules, eligibility, or guidelines..."></textarea>
+
+          <p class="err" id="co-ann-err"></p>
+          <button class="btn" type="submit" id="btn-co-ann-submit" style="margin-top:1rem;">Submit for Approval</button>
+        </form>
+
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem;">
+            <h3 style="margin:0;">My Announcement Submissions</h3>
+            <button class="btn ghost sm" id="btn-refresh-co-ann">↻ Refresh Submissions</button>
+          </div>
+          <div id="co-ann-list">
+            ${list.length ? list.map(a => {
+              const isRejected = a.approval_status === 'rejected';
+              return `
+                <section class="ann-card" data-ann="${a.id}">
+                  <div class="ann-card-head">
+                    <div>
+                      <h4 class="ann-title">${esc(a.title)}</h4>
+                      <div class="ann-meta" style="margin-top:.3rem;">
+                        ${a.category ? `<span class="ann-tag">${esc(a.category)}</span>` : ''}
+                        <span>Submitted ${fmtDate(a.created_at)}</span>
+                        ${a.published_at ? `<span>Published ${fmtDate(a.published_at)}</span>` : ''}
+                        <span>Revision ${a.revision || 1}</span>
+                      </div>
+                    </div>
+                    <div style="display:flex;gap:.5rem;align-items:center;">
+                      ${chip(a.approval_status)}
+                      <button class="btn sm ghost" data-del-ann="${a.id}" title="Delete submission">Delete</button>
+                    </div>
+                  </div>
+                  <div class="ann-body">${esc(a.content)}</div>
+                  ${isRejected ? `
+                    <div class="rejection-box" style="margin-top:.4rem;">
+                      <b>Placement Cell Feedback / Rejection Reason:</b><br>
+                      ${esc(a.rejection_reason || 'No specific reason provided.')}
+                      ${a.reviewer_name ? `<br><small class="muted">Reviewed by ${esc(a.reviewer_name)} on ${fmtDate(a.reviewed_at)}</small>` : ''}
+                    </div>
+                  ` : ''}
+                </section>
+              `;
+            }).join('') : empty('You have not submitted any announcements yet.')}
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Form submission handler
+    const form = $('#form-co-ann');
+    if (form) {
+      form.onsubmit = async (e) => {
+        e.preventDefault();
+        const btn = $('#btn-co-ann-submit');
+        const errEl = $('#co-ann-err');
+        errEl.textContent = '';
+
+        const title = $('#co-ann-t').value.trim();
+        const content = $('#co-ann-c').value.trim();
+        const category = $('#co-ann-cat').value.trim();
+
+        if (title.length < 3 || title.length > 150) {
+          errEl.textContent = 'Title must be between 3 and 150 characters.';
+          return;
+        }
+        if (content.length < 10 || content.length > 5000) {
+          errEl.textContent = 'Content must be between 10 and 5000 characters.';
+          return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Submitting...';
+        try {
+          await api('/api/announcements', {
+            method: 'POST',
+            body: { title, content, category: category || undefined },
+          });
+          toast('Announcement submitted successfully and is awaiting review.');
+          viewCompanyAnnouncements(el);
+        } catch (err) {
+          errEl.textContent = err.message;
+          btn.disabled = false;
+          btn.textContent = 'Submit for Approval';
+        }
+      };
+    }
+
+    const refreshBtn = $('#btn-refresh-co-ann');
+    if (refreshBtn) refreshBtn.onclick = () => viewCompanyAnnouncements(el);
+  } catch (err) {
+    el.innerHTML = empty(esc(err.message));
+  }
+}
+
+// Admin Announcements Management View
+async function viewAdminAnnouncements(el) {
+  el.innerHTML = '<p class="muted">Loading announcements…</p>';
+  try {
+    let pendingList = [];
+    let allList = [];
+    let companies = [];
+
+    if (adminAnnTab === 'pending') {
+      pendingList = await api('/api/announcements/pending');
+    } else if (adminAnnTab === 'all') {
+      allList = await api('/api/announcements?status=all');
+    } else if (adminAnnTab === 'create') {
+      try { companies = await api('/api/jobs/companies'); } catch { companies = []; }
+    }
+
+    el.innerHTML = `
+      <div class="tabs">
+        <button class="${adminAnnTab === 'pending' ? 'active' : ''}" data-ann-tab="pending">
+          Pending Approvals
+          ${pendingList.length > 0 ? `<span class="badge-count">${pendingList.length}</span>` : ''}
+        </button>
+        <button class="${adminAnnTab === 'create' ? 'active' : ''}" data-ann-tab="create">Create & Publish</button>
+        <button class="${adminAnnTab === 'all' ? 'active' : ''}" data-ann-tab="all">All Announcements</button>
+      </div>
+      <div id="admin-ann-tab-content"></div>
+    `;
+
+    const contentEl = $('#admin-ann-tab-content');
+
+    if (adminAnnTab === 'pending') {
+      contentEl.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;gap:.5rem;flex-wrap:wrap;">
+          <div>
+            <h3 style="margin:0;">Pending Company Announcements</h3>
+            <p class="help">Review submissions from registered companies before publishing them to the student feed.</p>
+          </div>
+          <button class="btn ghost sm" id="btn-refresh-admin-pending">↻ Refresh Queue</button>
+        </div>
+        ${pendingList.length ? pendingList.map(a => `
+          <section class="ann-card" data-ann="${a.id}">
+            <div class="ann-card-head">
+              <div>
+                <h4 class="ann-title">${esc(a.title)}</h4>
+                <div class="ann-meta" style="margin-top:.3rem;">
+                  <span class="chip company">${esc(a.submitting_company_name || 'Company')}</span>
+                  ${a.submitting_company_email ? `<span class="muted">${esc(a.submitting_company_email)}</span>` : ''}
+                  ${a.category ? `<span class="ann-tag">${esc(a.category)}</span>` : ''}
+                  <span>Submitted ${fmtDate(a.created_at)}</span>
+                  <span>Revision ${a.revision || 1}</span>
+                </div>
+              </div>
+              <div class="acts">
+                <button class="btn sm" data-approve-ann="${a.id}" data-rev="${a.revision}">Approve</button>
+                <button class="btn sm ghost" data-reject-ann-toggle="${a.id}">Reject</button>
+              </div>
+            </div>
+            <div class="ann-body">${esc(a.content)}</div>
+
+            <!-- Rejection Drawer -->
+            <div class="reject-box" id="reject-ann-box-${a.id}" style="display:none;">
+              <label for="reject-ann-reason-${a.id}"><b>Rejection Reason (Required) *</b></label>
+              <textarea id="reject-ann-reason-${a.id}" rows="2" placeholder="Provide clear feedback on why this announcement cannot be approved..."></textarea>
+              <div class="acts">
+                <button class="btn sm bad" data-reject-ann-submit="${a.id}" data-rev="${a.revision}">Confirm Rejection</button>
+                <button class="btn sm ghost" data-reject-ann-cancel="${a.id}">Cancel</button>
+              </div>
+            </div>
+          </section>
+        `).join('') : empty('No company announcements currently awaiting approval.')}
+      `;
+      const refreshBtn = $('#btn-refresh-admin-pending');
+      if (refreshBtn) refreshBtn.onclick = () => viewAdminAnnouncements(el);
+
+    } else if (adminAnnTab === 'create') {
+      contentEl.innerHTML = `
+        <form id="form-admin-ann" class="box" style="max-width:650px;">
+          <h3 style="margin-top:0;">Publish Placement Cell Announcement</h3>
+          <p class="help">Placement Cell announcements are published directly to students without requiring approval.</p>
+
+          <label for="adm-ann-t" style="margin-top:.8rem;">Title *</label>
+          <input id="adm-ann-t" required minlength="3" maxlength="150" placeholder="e.g., Placement Drive Schedule Announcement">
+
+          <label for="adm-ann-cat" style="margin-top:.8rem;">Category (optional)</label>
+          <input id="adm-ann-cat" maxlength="100" placeholder="e.g., General, Guidelines, Exam Notice, Campus Drive">
+
+          <label for="adm-ann-co" style="margin-top:.8rem;">Associate with Company (optional)</label>
+          <select id="adm-ann-co">
+            <option value="">None (General Placement Cell Notice)</option>
+            ${companies.map(c => `<option value="${c.id}">${esc(c.name)} (${esc(c.email)})</option>`).join('')}
+          </select>
+
+          <label for="adm-ann-c" style="margin-top:.8rem;">Content *</label>
+          <textarea id="adm-ann-c" rows="6" required minlength="10" maxlength="5000" placeholder="Enter announcement body text..."></textarea>
+
+          <p class="err" id="adm-ann-err"></p>
+          <button class="btn" type="submit" id="btn-adm-ann-submit" style="margin-top:1rem;">Publish Immediately</button>
+        </form>
+      `;
+
+      const form = $('#form-admin-ann');
+      if (form) {
+        form.onsubmit = async (e) => {
+          e.preventDefault();
+          const btn = $('#btn-adm-ann-submit');
+          const errEl = $('#adm-ann-err');
+          errEl.textContent = '';
+
+          const title = $('#adm-ann-t').value.trim();
+          const content = $('#adm-ann-c').value.trim();
+          const category = $('#adm-ann-cat').value.trim();
+          const company_id = $('#adm-ann-co').value;
+
+          if (title.length < 3 || title.length > 150) {
+            errEl.textContent = 'Title must be between 3 and 150 characters.';
+            return;
+          }
+          if (content.length < 10 || content.length > 5000) {
+            errEl.textContent = 'Content must be between 10 and 5000 characters.';
+            return;
+          }
+
+          btn.disabled = true;
+          btn.textContent = 'Publishing...';
+          try {
+            await api('/api/announcements', {
+              method: 'POST',
+              body: {
+                title,
+                content,
+                category: category || undefined,
+                company_id: company_id ? Number(company_id) : undefined,
+              },
+            });
+            toast('Announcement published immediately to student feed.');
+            adminAnnTab = 'all';
+            viewAdminAnnouncements(el);
+          } catch (err) {
+            errEl.textContent = err.message;
+            btn.disabled = false;
+            btn.textContent = 'Publish Immediately';
+          }
+        };
+      }
+
+    } else if (adminAnnTab === 'all') {
+      contentEl.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;gap:.5rem;flex-wrap:wrap;">
+          <div>
+            <h3 style="margin:0;">All Placement Announcements</h3>
+            <p class="help">Comprehensive list of all Placement Cell and Company announcements.</p>
+          </div>
+          <button class="btn ghost sm" id="btn-refresh-admin-all">↻ Refresh</button>
+        </div>
+        ${allList.length ? allList.map(a => {
+          const isCell = a.posting_source === 'placement_cell';
+          return `
+            <section class="ann-card" data-ann="${a.id}">
+              <div class="ann-card-head">
+                <div>
+                  <h4 class="ann-title">${esc(a.title)}</h4>
+                  <div class="ann-meta" style="margin-top:.3rem;">
+                    ${isCell ? '<span class="chip placement_cell">Placement Cell</span>' : `<span class="chip company">${esc(a.company_name || 'Company')}</span>`}
+                    ${a.category ? `<span class="ann-tag">${esc(a.category)}</span>` : ''}
+                    ${chip(a.approval_status)}
+                    <span>Published ${fmtDate(a.published_at || a.created_at)}</span>
+                    ${a.creator_name ? `<span class="muted">By ${esc(a.creator_name)}</span>` : ''}
+                  </div>
+                </div>
+                <div class="acts">
+                  <button class="btn sm danger" data-del-ann="${a.id}">Delete</button>
+                </div>
+              </div>
+              <div class="ann-body">${esc(a.content)}</div>
+              ${a.approval_status === 'rejected' && a.rejection_reason ? `
+                <div class="rejection-box" style="margin-top:.4rem;">
+                  <b>Rejection Reason:</b> ${esc(a.rejection_reason)}
+                  ${a.reviewer_name ? `<br><small class="muted">Reviewed by ${esc(a.reviewer_name)} on ${fmtDate(a.reviewed_at)}</small>` : ''}
+                </div>
+              ` : ''}
+            </section>
+          `;
+        }).join('') : empty('No announcements found.')}
+      `;
+      const refreshBtn = $('#btn-refresh-admin-all');
+      if (refreshBtn) refreshBtn.onclick = () => viewAdminAnnouncements(el);
+    }
+  } catch (err) {
+    el.innerHTML = empty(esc(err.message));
+  }
+}
+
+// Student "What's Going On?" Feed View
+async function viewStudentAnnouncements(el) {
+  el.innerHTML = '<p class="muted">Loading announcements…</p>';
+  try {
+    studentAnnouncements = await api('/api/announcements');
+    await updateUnreadBadge();
+    renderStudentAnnouncements(el);
+  } catch (err) {
+    el.innerHTML = empty(esc(err.message));
+  }
+}
+
+function renderStudentAnnouncements(el) {
+  const total = studentAnnouncements.length;
+  const unreadList = studentAnnouncements.filter(a => !a.is_read);
+  const unreadCount = unreadList.length;
+
+  const displayList = studentAnnFilter === 'unread' ? unreadList : studentAnnouncements;
+
+  el.innerHTML = `
+    <div class="ann-toolbar">
+      <div>
+        <div class="ann-filters">
+          <button class="btn sm ${studentAnnFilter === 'all' ? '' : 'ghost'}" id="btn-flt-all">
+            All Announcements (${total})
+          </button>
+          <button class="btn sm ${studentAnnFilter === 'unread' ? '' : 'ghost'}" id="btn-flt-unread">
+            Unread (${unreadCount})
+          </button>
+        </div>
+      </div>
+      <div style="display:flex;gap:.5rem;align-items:center;">
+        <button class="btn sm ghost" id="btn-mark-all-read" ${unreadCount === 0 ? 'disabled' : ''}>
+          ✓ Mark All as Read
+        </button>
+        <button class="btn sm ghost" id="btn-student-ann-refresh">↻ Refresh</button>
+      </div>
+    </div>
+
+    <div id="student-ann-feed">
+      ${displayList.length ? displayList.map(a => {
+        const isUnread = !a.is_read;
+        const isCell = a.posting_source === 'placement_cell';
+        return `
+          <article class="ann-card ${isUnread ? 'unread' : ''}" data-ann="${a.id}">
+            <div class="ann-card-head">
+              <div>
+                <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.4rem;flex-wrap:wrap;">
+                  ${isCell ? '<span class="chip placement_cell">Placement Cell</span>' : `<span class="chip company">${esc(a.company_name || 'Recruiting Company')}</span>`}
+                  ${a.category ? `<span class="ann-tag">${esc(a.category)}</span>` : ''}
+                  ${isUnread ? '<span class="ann-badge-unread">NEW</span>' : ''}
+                </div>
+                <h3 class="ann-title">${esc(a.title)}</h3>
+              </div>
+              <div class="acts">
+                ${isUnread ? `
+                  <button class="btn sm" data-mark-ann-read="${a.id}">Mark as read</button>
+                ` : `
+                  <span class="ann-badge-read">✓ Read ${fmtDate(a.read_at)}</span>
+                `}
+              </div>
+            </div>
+            <div class="ann-body">${esc(a.content)}</div>
+            <div class="ann-meta">
+              <span>Published ${fmtDate(a.published_at || a.created_at)}</span>
+              ${a.creator_name ? `<span>&bull; Posted by ${esc(a.creator_name)}</span>` : ''}
+            </div>
+          </article>
+        `;
+      }).join('') : (
+        studentAnnFilter === 'unread'
+          ? empty("You're all caught up! No unread announcements.")
+          : empty('No announcements published yet. Check back soon for placement updates.')
+      )}
+    </div>
+  `;
+
+  $('#btn-flt-all').onclick = () => {
+    studentAnnFilter = 'all';
+    renderStudentAnnouncements(el);
+  };
+  $('#btn-flt-unread').onclick = () => {
+    studentAnnFilter = 'unread';
+    renderStudentAnnouncements(el);
+  };
+  $('#btn-student-ann-refresh').onclick = () => viewStudentAnnouncements(el);
+
+  const markAllBtn = $('#btn-mark-all-read');
+  if (markAllBtn && unreadCount > 0) {
+    markAllBtn.onclick = async () => {
+      markAllBtn.disabled = true;
+      markAllBtn.textContent = 'Marking all…';
+      try {
+        await api('/api/announcements/read-all', { method: 'POST' });
+        studentAnnouncements.forEach(a => { a.is_read = true; a.read_at = new Date().toISOString(); });
+        unreadAnnouncementsCount = 0;
+        await updateUnreadBadge();
+        toast('All announcements marked as read.');
+        renderStudentAnnouncements(el);
+      } catch (err) {
+        toast(err.message, 'bad');
+        markAllBtn.disabled = false;
+        markAllBtn.textContent = '✓ Mark All as Read';
+      }
+    };
+  }
+}
+
+/* =============================================================================
  * 5. SHELL NAVIGATION & DISPATCH
  * ============================================================================= */
 const views = isAdmin ? {
-  overview: ['Overview', viewAdminOverview],
-  pending:  ['Pending Approvals', viewPendingApprovals],
-  post:     ['Post a Job', viewAdminPostJob],
-  all:      ['All Job Postings', viewAllJobs],
+  overview:      ['Overview', viewAdminOverview],
+  pending:       ['Pending Approvals', viewPendingApprovals],
+  post:          ['Post a Job', viewAdminPostJob],
+  all:           ['All Job Postings', viewAllJobs],
+  announcements: ['Announcements', viewAdminAnnouncements],
 } : isCo ? {
-  jobs:     ['My Jobs', viewCompanyJobs],
-  post:     ['Post a Job', viewCompanyPost],
+  jobs:          ['My Jobs', viewCompanyJobs],
+  post:          ['Post a Job', viewCompanyPost],
+  announcements: ['Announcements', viewCompanyAnnouncements],
 } : {
-  jobs:     ['Browse Jobs', viewBrowse],
-  apps:     ['My Applications', viewApps],
+  jobs:          ['Browse Jobs', viewBrowse],
+  apps:          ['My Applications', viewApps],
+  profile:       ['My Profile', viewStudentProfile],
+  announcements: ["What's Going On?", viewStudentAnnouncements],
 };
 
 async function show(v) {
   if (!views[v]) v = Object.keys(views)[0];
   const el = $('#view');
+
+  if (isStudent) {
+    await updateUnreadBadge();
+  }
+
   $('#nav').innerHTML = Object.entries(views)
-    .map(([k, [l]]) => `<button data-view="${k}" class="${k === v ? 'on' : ''}">${l}</button>`)
+    .map(([k, [l]]) => {
+      let badge = '';
+      if (k === 'announcements' && isStudent && unreadAnnouncementsCount > 0) {
+        badge = ` <span class="nav-badge" aria-label="${unreadAnnouncementsCount} unread announcements">${unreadAnnouncementsCount}</span>`;
+      }
+      return `<button data-view="${k}" class="${k === v ? 'on' : ''}">${l}${badge}</button>`;
+    })
     .join('');
   $('#title').textContent = views[v][0];
   el.innerHTML = '<p class="muted">Loading…</p>';
@@ -825,6 +1277,111 @@ document.addEventListener('click', async e => {
       logout();
     } else if (b.id === 'theme') {
       toggleTheme();
+    } else if (d.annTab) {
+      // Admin Announcements Tab switch
+      adminAnnTab = d.annTab;
+      viewAdminAnnouncements($('#view'));
+    } else if (d.approveAnn) {
+      // Admin Approve Pending Announcement
+      b.disabled = true;
+      b.textContent = 'Approving...';
+      try {
+        await api(`/api/announcements/${d.approveAnn}/approval`, {
+          method: 'PATCH',
+          body: {
+            approval_status: 'approved',
+            expected_revision: d.rev ? Number(d.rev) : undefined,
+          },
+        });
+        toast('Announcement approved and published.');
+        viewAdminAnnouncements($('#view'));
+      } catch (err) {
+        b.disabled = false;
+        b.textContent = 'Approve';
+        if (/conflict/i.test(err.message) || err.message.includes('409') || /already/i.test(err.message)) {
+          toast('Conflict: Announcement was modified or already reviewed. Queue refreshed.', 'bad');
+          viewAdminAnnouncements($('#view'));
+        } else {
+          throw err;
+        }
+      }
+    } else if (d.rejectAnnToggle) {
+      // Toggle announcement rejection drawer
+      const rBox = $(`#reject-ann-box-${d.rejectAnnToggle}`);
+      if (rBox) {
+        rBox.style.display = rBox.style.display === 'none' ? 'flex' : 'none';
+      }
+    } else if (d.rejectAnnCancel) {
+      // Cancel announcement rejection
+      const rBox = $(`#reject-ann-box-${d.rejectAnnCancel}`);
+      if (rBox) rBox.style.display = 'none';
+    } else if (d.rejectAnnSubmit) {
+      // Admin Reject Pending Announcement with mandatory reason
+      const reasonEl = $(`#reject-ann-reason-${d.rejectAnnSubmit}`);
+      const reason = reasonEl ? reasonEl.value.trim() : '';
+      if (!reason) {
+        toast('A meaningful rejection reason is required.', 'bad');
+        if (reasonEl) reasonEl.focus();
+        return;
+      }
+      b.disabled = true;
+      b.textContent = 'Rejecting...';
+      try {
+        await api(`/api/announcements/${d.rejectAnnSubmit}/approval`, {
+          method: 'PATCH',
+          body: {
+            approval_status: 'rejected',
+            rejection_reason: reason,
+            expected_revision: d.rev ? Number(d.rev) : undefined,
+          },
+        });
+        toast('Announcement rejected.');
+        viewAdminAnnouncements($('#view'));
+      } catch (err) {
+        b.disabled = false;
+        b.textContent = 'Confirm Rejection';
+        if (/conflict/i.test(err.message) || err.message.includes('409') || /already/i.test(err.message)) {
+          toast('Conflict: Announcement was modified or already reviewed. Queue refreshed.', 'bad');
+          viewAdminAnnouncements($('#view'));
+        } else {
+          throw err;
+        }
+      }
+    } else if (d.delAnn) {
+      // Delete Announcement
+      if (confirm('Are you sure you want to delete this announcement?')) {
+        b.disabled = true;
+        try {
+          await api('/api/announcements/' + d.delAnn, { method: 'DELETE' });
+          toast('Announcement deleted successfully.');
+          if (isAdmin) viewAdminAnnouncements($('#view'));
+          else if (isCo) viewCompanyAnnouncements($('#view'));
+        } catch (err) {
+          b.disabled = false;
+          toast(err.message, 'bad');
+          if (isAdmin) viewAdminAnnouncements($('#view'));
+          else if (isCo) viewCompanyAnnouncements($('#view'));
+        }
+      }
+    } else if (d.markAnnRead) {
+      // Student mark single announcement as read
+      b.disabled = true;
+      b.textContent = 'Marking…';
+      try {
+        await api(`/api/announcements/${d.markAnnRead}/read`, { method: 'POST' });
+        const target = studentAnnouncements.find(a => a.id === Number(d.markAnnRead));
+        if (target) {
+          target.is_read = true;
+          target.read_at = new Date().toISOString();
+        }
+        await updateUnreadBadge();
+        toast('Marked as read.');
+        renderStudentAnnouncements($('#view'));
+      } catch (err) {
+        b.disabled = false;
+        b.textContent = 'Mark as read';
+        toast(err.message, 'bad');
+      }
     } else if (d.apply) {
       // Student Job Application
       b.disabled = true;
