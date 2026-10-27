@@ -14,6 +14,7 @@ const jobRoutes         = require('./routes/jobs');
 const applicationRoutes = require('./routes/applications');
 const profileRoutes     = require('./routes/profile');
 const resumeRoutes      = require('./routes/resume');
+const announcementRoutes = require('./routes/announcements');
 
 const app = express();
 
@@ -40,6 +41,7 @@ app.use('/api/jobs',         jobRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/profile',      profileRoutes);
 app.use('/api/profile/resume', resumeRoutes);
+app.use('/api/announcements',  announcementRoutes);
 
 // Health-check
 app.get('/', (_req, res) => res.json({ status: 'ok', message: 'Placement Portal API' }));
