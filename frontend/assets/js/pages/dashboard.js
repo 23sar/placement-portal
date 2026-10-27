@@ -27,6 +27,14 @@ const fmtDateTimeInput = d => {
 };
 const chip = s => `<span class="chip ${esc(s || '')}">${esc(String(s ?? '').replace(/_/g, ' '))}</span>`;
 const empty = (msg, btn = '') => `<div class="empty"><p class="muted">${esc(msg)}</p>${btn}</div>`;
+const formatResumeSizeForApply = bytes => {
+  const n = Number(bytes || 0);
+  return n >= 1024 * 1024 ? `${(n / (1024 * 1024)).toFixed(2)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+};
+const safeDownloadNameForApplication = name => {
+  const base = String(name || 'resume.pdf').replace(/[\\/\u0000-\u001f\u007f]/g, '_').replace(/\.\.+/g, '.');
+  return base.toLowerCase().endsWith('.pdf') ? base.slice(0, 255) : 'resume.pdf';
+};
 
 // Data Loaders
 const loadJobs = async () => { jobs = await api('/api/jobs'); };
@@ -114,6 +122,12 @@ async function viewApps(el) {
         <div>
           <h3>${esc(a.title)}</h3>
           <p class="muted">${esc(a.company || a.recruiting_organization)}, ${esc(a.location)}</p>
+          ${a.has_resume ? `
+            <div style="margin-top: 0.35rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+              <span class="muted text-sm"><b>Submitted resume:</b> ${esc(a.resume_name)}</span>
+              <button class="btn sm ghost" data-download-app-resume="${a.id}" data-resumename="${esc(a.resume_name || 'resume.pdf')}" style="padding: 2px 8px; font-size: 0.8rem;">Download Snapshot</button>
+            </div>
+          ` : '<p class="muted" style="margin-top: 0.35rem; font-size: 0.85rem;">No resume attached</p>'}
         </div>
         <div class="meta">
           <span>Applied ${fmtDate(a.created_at)}</span>
@@ -765,6 +779,13 @@ async function toggleApplicants(id, force) {
         <div>
           <b>${esc(a.name)}</b> <span class="muted">${esc(a.email)}</span>
           <span class="help" style="margin-left: .5rem;">Applied ${fmtDate(a.created_at)}</span>
+          ${a.has_resume ? `
+            <div style="margin-top: 0.35rem;">
+              <button class="btn sm ghost" data-download-app-resume="${a.application_id}" data-resumename="${esc(a.resume_name || 'resume.pdf')}" style="padding: 2px 8px; font-size: 0.8rem;">
+                📄 Download Resume Snapshot (${esc(a.resume_name)})
+              </button>
+            </div>
+          ` : '<div class="muted" style="font-size: 0.8rem; margin-top: 0.25rem;">No resume attached</div>'}
         </div>
         ${chip(a.status)}
         <div class="acts">
@@ -835,8 +856,8 @@ async function viewCompanyAnnouncements(el) {
           </div>
           <div id="co-ann-list">
             ${list.length ? list.map(a => {
-              const isRejected = a.approval_status === 'rejected';
-              return `
+      const isRejected = a.approval_status === 'rejected';
+      return `
                 <section class="ann-card" data-ann="${a.id}">
                   <div class="ann-card-head">
                     <div>
@@ -863,7 +884,7 @@ async function viewCompanyAnnouncements(el) {
                   ` : ''}
                 </section>
               `;
-            }).join('') : empty('You have not submitted any announcements yet.')}
+    }).join('') : empty('You have not submitted any announcements yet.')}
           </div>
         </div>
       </div>
@@ -1070,8 +1091,8 @@ async function viewAdminAnnouncements(el) {
           <button class="btn ghost sm" id="btn-refresh-admin-all">↻ Refresh</button>
         </div>
         ${allList.length ? allList.map(a => {
-          const isCell = a.posting_source === 'placement_cell';
-          return `
+        const isCell = a.posting_source === 'placement_cell';
+        return `
             <section class="ann-card" data-ann="${a.id}">
               <div class="ann-card-head">
                 <div>
@@ -1097,7 +1118,7 @@ async function viewAdminAnnouncements(el) {
               ` : ''}
             </section>
           `;
-        }).join('') : empty('No announcements found.')}
+      }).join('') : empty('No announcements found.')}
       `;
       const refreshBtn = $('#btn-refresh-admin-all');
       if (refreshBtn) refreshBtn.onclick = () => viewAdminAnnouncements(el);
@@ -1148,9 +1169,9 @@ function renderStudentAnnouncements(el) {
 
     <div id="student-ann-feed">
       ${displayList.length ? displayList.map(a => {
-        const isUnread = !a.is_read;
-        const isCell = a.posting_source === 'placement_cell';
-        return `
+    const isUnread = !a.is_read;
+    const isCell = a.posting_source === 'placement_cell';
+    return `
           <article class="ann-card ${isUnread ? 'unread' : ''}" data-ann="${a.id}">
             <div class="ann-card-head">
               <div>
@@ -1176,11 +1197,11 @@ function renderStudentAnnouncements(el) {
             </div>
           </article>
         `;
-      }).join('') : (
-        studentAnnFilter === 'unread'
-          ? empty("You're all caught up! No unread announcements.")
-          : empty('No announcements published yet. Check back soon for placement updates.')
-      )}
+  }).join('') : (
+      studentAnnFilter === 'unread'
+        ? empty("You're all caught up! No unread announcements.")
+        : empty('No announcements published yet. Check back soon for placement updates.')
+    )}
     </div>
   `;
 
@@ -1219,19 +1240,19 @@ function renderStudentAnnouncements(el) {
  * 5. SHELL NAVIGATION & DISPATCH
  * ============================================================================= */
 const views = isAdmin ? {
-  overview:      ['Overview', viewAdminOverview],
-  pending:       ['Pending Approvals', viewPendingApprovals],
-  post:          ['Post a Job', viewAdminPostJob],
-  all:           ['All Job Postings', viewAllJobs],
+  overview: ['Overview', viewAdminOverview],
+  pending: ['Pending Approvals', viewPendingApprovals],
+  post: ['Post a Job', viewAdminPostJob],
+  all: ['All Job Postings', viewAllJobs],
   announcements: ['Announcements', viewAdminAnnouncements],
 } : isCo ? {
-  jobs:          ['My Jobs', viewCompanyJobs],
-  post:          ['Post a Job', viewCompanyPost],
+  jobs: ['My Jobs', viewCompanyJobs],
+  post: ['Post a Job', viewCompanyPost],
   announcements: ['Announcements', viewCompanyAnnouncements],
 } : {
-  jobs:          ['Browse Jobs', viewBrowse],
-  apps:          ['My Applications', viewApps],
-  profile:       ['My Profile', viewStudentProfile],
+  jobs: ['Browse Jobs', viewBrowse],
+  apps: ['My Applications', viewApps],
+  profile: ['My Profile', viewStudentProfile],
   announcements: ["What's Going On?", viewStudentAnnouncements],
 };
 
@@ -1382,21 +1403,148 @@ document.addEventListener('click', async e => {
         b.textContent = 'Mark as read';
         toast(err.message, 'bad');
       }
-    } else if (d.apply) {
-      // Student Job Application
+    } else if (d.downloadAppResume) {
       b.disabled = true;
       try {
-        await api('/api/jobs/apply', { method: 'POST', body: { job_id: Number(d.apply) } });
-        toast('Application submitted successfully.');
-      } catch (err) {
-        if (!/already/i.test(err.message)) {
-          b.disabled = false;
-          throw err;
+        const headers = {};
+        if (session.token()) headers.Authorization = `Bearer ${session.token()}`;
+        const response = await fetch(`${API_BASE}/api/applications/${d.downloadAppResume}/resume`, { headers });
+        if (!response.ok) {
+          const errorBody = await response.json().catch(() => ({}));
+          if (response.status === 401 && session.token()) logout();
+          throw new Error(errorBody.error || `Download failed (${response.status})`);
         }
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = safeDownloadNameForApplication(d.resumename || 'submitted_resume.pdf');
+        document.body.append(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+        toast('Resume snapshot download started.');
+      } catch (err) {
+        toast(err.message, 'bad');
+      } finally {
+        b.disabled = false;
       }
-      b.textContent = 'Applied';
-      apps.push({ job_id: Number(d.apply) });
-      loadStats();
+    } else if (d.apply) {
+      // Student Job Application with Resume Picker Modal
+      const jobId = Number(d.apply);
+      const targetJob = jobs.find(j => j.id === jobId) || { id: jobId, title: 'Job' };
+
+      b.disabled = true;
+      const originalText = b.textContent;
+      b.textContent = 'Loading resumes…';
+
+      let studentResumes = [];
+      try {
+        const rData = await api('/api/profile/resumes').catch(() => api('/api/profile/resume'));
+        studentResumes = rData.resumes || (rData.resume ? [rData.resume] : []);
+      } catch (err) {
+        b.disabled = false;
+        b.textContent = originalText;
+        toast('Could not load resumes: ' + err.message, 'bad');
+        return;
+      }
+
+      b.disabled = false;
+      b.textContent = originalText;
+
+      if (!studentResumes.length) {
+        if (confirm('You must upload at least one resume in My Profile before applying for jobs.\n\nGo to My Profile now?')) {
+          show('profile');
+        }
+        return;
+      }
+
+      const existingModal = document.getElementById('apply-resume-modal');
+      if (existingModal) existingModal.remove();
+
+      const defaultResume = studentResumes.find(r => r.is_default) || studentResumes[0];
+
+      const modal = document.createElement('div');
+      modal.id = 'apply-resume-modal';
+      modal.className = 'apply-modal-backdrop';
+      modal.innerHTML = `
+        <div class="apply-modal-box card" style="max-width: 520px; width: 90%; box-shadow: 0 10px 25px rgba(0,0,0,0.3); border: 1px solid var(--line); background: var(--card); padding: 1.5rem; border-radius: var(--r-m);">
+          <h3 style="margin-top:0;">Apply for ${esc(targetJob.title)}</h3>
+          <p class="muted" style="margin-top:0.25rem;">${esc(targetJob.recruiting_organization || '')}</p>
+          <div style="margin: 1.2rem 0;">
+            <label for="modal-resume-select" style="font-weight:bold; display:block; margin-bottom:0.5rem;">Choose Resume to Submit *</label>
+            <select id="modal-resume-select" style="width:100%; padding:0.6rem; border:1px solid var(--line); border-radius:var(--r-s); background:var(--bg); color:var(--text);">
+              ${studentResumes.map(r => `
+                <option value="${r.id}" ${r.id === defaultResume.id ? 'selected' : ''}>
+                  ${esc(r.label || r.original_name)} (${esc(r.original_name)})${r.is_default ? ' — [Default]' : ''}
+                </option>
+              `).join('')}
+            </select>
+            <div id="modal-resume-preview" class="help" style="margin-top:0.75rem; padding:0.6rem; background:var(--bg); border:1px solid var(--line); border-radius:var(--r-s);">
+            </div>
+            <p class="help" style="margin-top:0.75rem;">
+              An immutable snapshot of your selected resume will be submitted. If you update or delete your profile resume later, this job application will retain the exact snapshot submitted.
+            </p>
+            <p class="err" id="modal-apply-error" role="alert" style="margin-top:0.5rem;"></p>
+          </div>
+          <div class="acts" style="justify-content: flex-end; gap:0.5rem;">
+            <button class="btn ghost" id="modal-apply-cancel" type="button">Cancel</button>
+            <button class="btn" id="modal-apply-confirm" type="button">Submit Application</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+
+      const selectEl = modal.querySelector('#modal-resume-select');
+      const previewEl = modal.querySelector('#modal-resume-preview');
+      const confirmBtn = modal.querySelector('#modal-apply-confirm');
+      const cancelBtn = modal.querySelector('#modal-apply-cancel');
+      const errEl = modal.querySelector('#modal-apply-error');
+
+      const updatePreview = () => {
+        const chosenId = Number(selectEl.value);
+        const chosen = studentResumes.find(r => r.id === chosenId);
+        if (chosen) {
+          previewEl.innerHTML = `<b>Resume:</b> ${esc(chosen.label || chosen.original_name)} <span class="muted">(${esc(chosen.original_name)}, ${formatResumeSizeForApply(chosen.file_size)})${chosen.is_default ? ' [Default]' : ''}</span>`;
+        }
+      };
+      updatePreview();
+      selectEl.onchange = updatePreview;
+
+      cancelBtn.onclick = () => modal.remove();
+
+      confirmBtn.onclick = async () => {
+        const chosenResumeId = Number(selectEl.value);
+        if (!chosenResumeId) {
+          errEl.textContent = 'Please choose a resume to submit.';
+          return;
+        }
+        confirmBtn.disabled = true;
+        cancelBtn.disabled = true;
+        confirmBtn.textContent = 'Submitting…';
+        errEl.textContent = '';
+
+        try {
+          await api('/api/jobs/apply', {
+            method: 'POST',
+            body: {
+              job_id: jobId,
+              resume_id: chosenResumeId,
+            },
+          });
+          modal.remove();
+          b.disabled = true;
+          b.textContent = 'Applied';
+          apps.push({ job_id: jobId });
+          toast('Application submitted successfully.');
+          loadStats();
+        } catch (applyErr) {
+          confirmBtn.disabled = false;
+          cancelBtn.disabled = false;
+          confirmBtn.textContent = 'Submit Application';
+          errEl.textContent = applyErr.message;
+        }
+      };
     } else if (d.approve) {
       // Admin Approve Pending Job
       b.disabled = true;
@@ -1522,8 +1670,8 @@ $('#me-name').textContent = user.name || 'User';
 $('#me-role').textContent = isAdmin
   ? 'Placement Cell Admin'
   : isCo
-  ? 'Company Account'
-  : 'Student Account';
+    ? 'Company Account'
+    : 'Student Account';
 
 // Initialize default tab
 show(isAdmin ? 'overview' : 'jobs');

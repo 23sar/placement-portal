@@ -1,10 +1,10 @@
-/* Student profile + resume management (Step 8.3–8.5).
+﻿/* Student profile + resume library management (Step 8.3–8.5 & Multiple Resumes).
  * All user data is escaped before markup insertion and the backend remains the
  * authority for validation and ownership checks.
  */
 const PROFILE_DETAIL_SECTIONS = {
   skills: {
-    label: 'Skills', singular: 'Skill',
+    label: 'Technical Skills', singular: 'Skill',
     fields: [
       { name: 'skill_name', label: 'Skill name', required: true, max: 100 },
       { name: 'proficiency', label: 'Proficiency', type: 'select', options: [['', 'Not specified'], ['beginner', 'Beginner'], ['intermediate', 'Intermediate'], ['advanced', 'Advanced'], ['expert', 'Expert']] },
@@ -82,7 +82,7 @@ function normalizeProfileDetails(payload) {
   return normalized;
 }
 
-function profileCompletion(profile, details, resume) {
+function profileCompletion(profile, details, resumes) {
   const hasText = key => String(profile?.[key] ?? '').trim().length > 0;
   const hasValue = key => profile?.[key] !== null && profile?.[key] !== undefined && String(profile[key]).trim() !== '';
   const hasLink = ['github_url', 'linkedin_url', 'portfolio_url'].some(hasText);
@@ -98,7 +98,7 @@ function profileCompletion(profile, details, resume) {
     ['At least one profile link', hasLink],
     ['At least one skill', (details.skills || []).length > 0],
     ['At least one project', (details.projects || []).length > 0],
-    ['Resume uploaded', Boolean(resume)],
+    ['Resume uploaded', (resumes || []).length > 0],
   ];
   const completed = checks.filter(([, ok]) => ok).length;
   return { checks, completed, total: checks.length, percent: Math.round((completed / checks.length) * 100) };
@@ -148,15 +148,20 @@ async function viewStudentProfile(el) {
   const profile = coreResponse.profile || {};
   let details = { skills: [], projects: [], internships: [], achievements: [] };
   let detailsError = '';
-  let resume = null;
+  let resumes = [];
   let resumeError = '';
 
   try { details = normalizeProfileDetails(await api('/api/profile/details')); }
   catch (err) { detailsError = err.message; }
-  try { resume = (await api('/api/profile/resume')).resume || null; }
-  catch (err) { resumeError = err.message; }
 
-  const completion = profileCompletion(profile, details, resume);
+  try {
+    const resData = await api('/api/profile/resumes').catch(() => api('/api/profile/resume'));
+    resumes = resData.resumes || (resData.resume ? [resData.resume] : []);
+  } catch (err) {
+    resumeError = err.message;
+  }
+
+  const completion = profileCompletion(profile, details, resumes);
   const coreFields = [
     { name: 'phone', label: 'Phone number', type: 'tel', max: 25 },
     { name: 'department', label: 'Department', max: 100 },
@@ -177,12 +182,40 @@ async function viewStudentProfile(el) {
     return `<div>${`<label for="profile-${f.name}">${esc(f.label)}</label>`}${input}</div>`;
   }).join('');
 
-  const resumeMarkup = resume ? `
-    <div class="resume-current" id="resume-current">
-      <div><b>${esc(resume.original_name)}</b><p class="muted">PDF · ${formatResumeSize(resume.file_size)} · Updated ${esc(String(resume.updated_at || resume.created_at || '').slice(0, 10) || 'date unavailable')}</p></div>
-      <div class="acts"><button class="btn sm" type="button" id="resume-download">Download</button><button class="btn danger sm" type="button" id="resume-delete">Delete</button></div>
+  const resumeCardsMarkup = resumes.length ? `
+    <div class="resume-library-list" style="display:flex; flex-direction:column; gap:0.75rem;">
+      ${resumes.map(r => `
+        <article class="resume-card" style="border:1px solid var(--line); border-radius:var(--r-s); padding:0.9rem; background:var(--bg);" data-resume-id="${r.id}">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap;">
+            <div>
+              <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                <b style="font-size:1.05rem;">${esc(r.label || r.original_name)}</b>
+                ${r.is_default ? '<span class="chip status-approved" style="font-size:0.75rem; padding:2px 8px;">Default</span>' : ''}
+              </div>
+              <p class="muted text-sm" style="margin:0.25rem 0 0;">
+                ${esc(r.original_name)} &bull; PDF &bull; ${formatResumeSize(r.file_size)} &bull; Updated ${esc(String(r.updated_at || r.created_at || '').slice(0, 10) || 'recently')}
+              </p>
+            </div>
+            <div class="acts" style="flex-wrap:wrap;">
+              <button class="btn sm" type="button" data-download-id="${r.id}" data-filename="${esc(r.original_name)}">Download</button>
+              <button class="btn ghost sm" type="button" data-rename-id="${r.id}">Rename</button>
+              ${!r.is_default ? `<button class="btn ghost sm" type="button" data-set-default-id="${r.id}">Set as Default</button>` : ''}
+              <button class="btn danger sm" type="button" data-delete-id="${r.id}">Delete</button>
+            </div>
+          </div>
+          <div class="resume-rename-form" id="rename-box-${r.id}" hidden style="margin-top:0.75rem; border-top:1px dashed var(--line); padding-top:0.6rem;">
+            <label for="rename-input-${r.id}" style="font-size:0.85rem;">Edit resume label:</label>
+            <div style="display:flex; gap:0.5rem; margin-top:0.25rem;">
+              <input type="text" id="rename-input-${r.id}" value="${esc(r.label || r.original_name)}" maxlength="100" style="flex:1;">
+              <button class="btn sm" type="button" data-save-rename="${r.id}">Save</button>
+              <button class="btn ghost sm" type="button" data-cancel-rename="${r.id}">Cancel</button>
+            </div>
+            <p class="err" id="rename-error-${r.id}" role="alert" style="margin-top:0.3rem;"></p>
+          </div>
+        </article>
+      `).join('')}
     </div>
-    <p class="help">Uploading a new PDF replaces this resume.</p>` : '<p class="muted">No resume uploaded yet. Upload a PDF (maximum 5 MB).</p>';
+  ` : '<p class="muted">No resumes uploaded yet. Upload a PDF resume below (maximum 5 MB) to build your resume library.</p>';
 
   el.innerHTML = `
     <div class="profile-intro">
@@ -192,7 +225,7 @@ async function viewStudentProfile(el) {
     <section class="card profile-completion">
       <div class="completion-track" role="progressbar" aria-label="Profile completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${completion.percent}"><span style="width:${completion.percent}%"></span></div>
       <p class="muted">${completion.completed} of ${completion.total} profile items completed. Update these sections to improve your profile.</p>
-      <div class="completion-checklist">${completion.checks.map(([label, done]) => `<span class="completion-item ${done ? 'done' : ''}"><span aria-hidden="true">${done ? '✓' : '○'}</span> ${esc(label)}</span>`).join('')}</div>
+      <div class="completion-checklist">${completion.checks.map(([label, done]) => `<span class="completion-item ${done ? 'done' : ''}"><span aria-hidden="true">${done ? '✓' : '✗'}</span> ${esc(label)}</span>`).join('')}</div>
     </section>
     <section class="card profile-section">
       <div class="profile-section-head"><div><h3>Personal & Academic Details</h3><p class="muted">Your account name and email are managed separately and cannot be changed here.</p></div></div>
@@ -201,16 +234,41 @@ async function viewStudentProfile(el) {
     ${detailsError ? `<p class="profile-error" role="alert">Could not load profile sections: ${esc(detailsError)}. You can retry by reopening My Profile.</p>` : ''}
     <div class="profile-detail-grid">${Object.keys(PROFILE_DETAIL_SECTIONS).map(key => renderDetailSection(key, details[key] || [])).join('')}</div>
     <section class="card profile-section" id="resume-section">
-      <div class="profile-section-head"><div><h3>Resume</h3><p class="muted">Upload a PDF resume. Files are private and can be downloaded only through your authenticated student account.</p></div></div>
-      ${resumeError ? `<p class="profile-error" role="alert">Could not load resume information: ${esc(resumeError)}.</p>` : ''}
-      ${resumeMarkup}
-      <form id="resume-upload-form" class="resume-upload-form">
-        <label for="resume-file">${resume ? 'Replace resume' : 'Choose resume'} (PDF, max 5 MB)</label>
-        <input type="file" id="resume-file" name="resume" accept="application/pdf,.pdf" required>
-        <p class="help">Only PDF files are accepted. The file is validated by the server before storage.</p>
-        <p class="err" id="resume-error" role="alert"></p>
-        <button class="btn" id="resume-upload-button" type="submit">${resume ? 'Upload replacement' : 'Upload resume'}</button>
-      </form>
+      <div class="profile-section-head">
+        <div>
+          <h3>Resume Library</h3>
+          <p class="muted">Upload and manage multiple saved resumes. Choose which resume to submit with each job application.</p>
+        </div>
+      </div>
+      ${resumeError ? `<p class="profile-error" role="alert">Could not load resume library: ${esc(resumeError)}.</p>` : ''}
+      ${resumeCardsMarkup}
+      <details class="profile-editor" id="resume-upload-details" style="margin-top:0.5rem;" ${resumes.length === 0 ? 'open' : ''}>
+        <summary>Upload ${resumes.length === 0 ? 'Resume' : 'Another Resume'}</summary>
+        <form id="resume-upload-form" class="resume-upload-form" style="margin-top:0.6rem;">
+          <div class="profile-form-grid">
+            <div>
+              <label for="resume-label">Resume label (optional)</label>
+              <input type="text" id="resume-label" name="label" placeholder="e.g. Software Engineering Resume" maxlength="100">
+            </div>
+            <div>
+              <label for="resume-file">Choose PDF file (max 5 MB) *</label>
+              <input type="file" id="resume-file" name="resume" accept="application/pdf,.pdf" required>
+            </div>
+          </div>
+          ${resumes.length > 0 ? `
+            <div style="margin-top:0.5rem;">
+              <label style="display:inline-flex; align-items:center; gap:0.4rem; cursor:pointer; font-weight:normal;">
+                <input type="checkbox" id="resume-make-default" name="is_default"> Set as my default resume
+              </label>
+            </div>
+          ` : ''}
+          <p class="help" style="margin-top:0.4rem;">Only PDF files are accepted. Resumes are stored privately and securely.</p>
+          <p class="err" id="resume-error" role="alert"></p>
+          <div class="acts" style="margin-top:0.6rem;">
+            <button class="btn" id="resume-upload-button" type="submit">Upload to Library</button>
+          </div>
+        </form>
+      </details>
     </section>`;
 
   // Save the core profile. The API enforces all fields and ownership rules.
@@ -315,72 +373,157 @@ async function viewStudentProfile(el) {
     };
   }
 
+  // Upload handler for resume library
   const uploadForm = $('#resume-upload-form');
-  uploadForm.onsubmit = async event => {
-    event.preventDefault();
-    const fileInput = $('#resume-file');
-    const errorEl = $('#resume-error');
-    const button = $('#resume-upload-button');
-    const file = fileInput.files?.[0];
-    errorEl.textContent = '';
-    if (!file) { errorEl.textContent = 'Choose a PDF file first.'; return; }
-    if (file.size > 5 * 1024 * 1024) { errorEl.textContent = 'Resume must be 5 MB or smaller.'; return; }
-    if (file.type !== 'application/pdf' || !file.name.toLowerCase().endsWith('.pdf')) {
-      errorEl.textContent = 'Choose a PDF file. Other file types are not accepted.'; return;
-    }
-    const formData = new FormData();
-    formData.append('resume', file, file.name);
-    button.disabled = true;
-    button.textContent = 'Uploading…';
-    try {
-      await api('/api/profile/resume', { method: 'POST', body: formData });
-      toast(resume ? 'Resume replaced successfully.' : 'Resume uploaded successfully.');
-      await show('profile');
-    } catch (err) {
-      errorEl.textContent = err.message;
-      button.disabled = false;
-      button.textContent = resume ? 'Upload replacement' : 'Upload resume';
-    }
-  };
-
-  const downloadButton = $('#resume-download');
-  if (downloadButton) downloadButton.onclick = async () => {
-    downloadButton.disabled = true;
-    try {
-      const headers = {};
-      if (session.token()) headers.Authorization = `Bearer ${session.token()}`;
-      const response = await fetch(`${API_BASE}/api/profile/resume/download`, { headers });
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
-        if (response.status === 401 && session.token()) logout();
-        throw new Error(errorBody.error || `Download failed (${response.status})`);
+  if (uploadForm) {
+    uploadForm.onsubmit = async event => {
+      event.preventDefault();
+      const fileInput = $('#resume-file');
+      const labelInput = $('#resume-label');
+      const defaultCheck = $('#resume-make-default');
+      const errorEl = $('#resume-error');
+      const button = $('#resume-upload-button');
+      const file = fileInput.files?.[0];
+      errorEl.textContent = '';
+      if (!file) { errorEl.textContent = 'Choose a PDF file first.'; return; }
+      if (file.size > 5 * 1024 * 1024) { errorEl.textContent = 'Resume must be 5 MB or smaller.'; return; }
+      if (file.type !== 'application/pdf' || !file.name.toLowerCase().endsWith('.pdf')) {
+        errorEl.textContent = 'Choose a PDF file. Other file types are not accepted.'; return;
       }
-      const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = objectUrl;
-      link.download = safeDownloadName(resume.original_name);
-      document.body.append(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-      toast('Resume download started.');
-    } catch (err) {
-      toast(err.message, 'bad');
-    } finally { downloadButton.disabled = false; }
-  };
+      const formData = new FormData();
+      formData.append('resume', file, file.name);
+      if (labelInput && labelInput.value.trim()) {
+        formData.append('label', labelInput.value.trim());
+      }
+      if (defaultCheck && defaultCheck.checked) {
+        formData.append('is_default', 'true');
+      }
+      button.disabled = true;
+      button.textContent = 'Uploading…';
+      try {
+        await api('/api/profile/resumes', { method: 'POST', body: formData });
+        toast('Resume uploaded to library.');
+        await show('profile');
+      } catch (err) {
+        errorEl.textContent = err.message;
+        button.disabled = false;
+        button.textContent = 'Upload to Library';
+      }
+    };
+  }
 
-  const deleteButton = $('#resume-delete');
-  if (deleteButton) deleteButton.onclick = async () => {
-    if (!confirm('Delete your uploaded resume?')) return;
-    deleteButton.disabled = true;
-    try {
-      await api('/api/profile/resume', { method: 'DELETE' });
-      toast('Resume deleted.');
-      await show('profile');
-    } catch (err) {
-      deleteButton.disabled = false;
-      toast(err.message, 'bad');
-    }
-  };
+  // Download resume by ID
+  for (const btn of el.querySelectorAll('[data-download-id]')) {
+    btn.onclick = async () => {
+      const id = btn.dataset.downloadId;
+      const filename = btn.dataset.filename || 'resume.pdf';
+      btn.disabled = true;
+      try {
+        const headers = {};
+        if (session.token()) headers.Authorization = `Bearer ${session.token()}`;
+        const response = await fetch(`${API_BASE}/api/profile/resumes/${id}/download`, { headers });
+        if (!response.ok) {
+          const errorBody = await response.json().catch(() => ({}));
+          if (response.status === 401 && session.token()) logout();
+          throw new Error(errorBody.error || `Download failed (${response.status})`);
+        }
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = safeDownloadName(filename);
+        document.body.append(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+        toast('Resume download started.');
+      } catch (err) {
+        toast(err.message, 'bad');
+      } finally { btn.disabled = false; }
+    };
+  }
+
+  // Rename controls
+  for (const btn of el.querySelectorAll('[data-rename-id]')) {
+    btn.onclick = () => {
+      const id = btn.dataset.renameId;
+      const box = $(`#rename-box-${id}`, el);
+      if (box) {
+        box.hidden = !box.hidden;
+        if (!box.hidden) {
+          const inp = $(`#rename-input-${id}`, el);
+          if (inp) { inp.focus(); inp.select(); }
+        }
+      }
+    };
+  }
+
+  for (const btn of el.querySelectorAll('[data-cancel-rename]')) {
+    btn.onclick = () => {
+      const id = btn.dataset.cancelRename;
+      const box = $(`#rename-box-${id}`, el);
+      if (box) box.hidden = true;
+      const err = $(`#rename-error-${id}`, el);
+      if (err) err.textContent = '';
+    };
+  }
+
+  for (const btn of el.querySelectorAll('[data-save-rename]')) {
+    btn.onclick = async () => {
+      const id = btn.dataset.saveRename;
+      const input = $(`#rename-input-${id}`, el);
+      const errEl = $(`#rename-error-${id}`, el);
+      const newLabel = input ? input.value.trim() : '';
+      if (!newLabel) {
+        if (errEl) errEl.textContent = 'Label cannot be empty.';
+        return;
+      }
+      btn.disabled = true;
+      try {
+        await api(`/api/profile/resumes/${id}`, {
+          method: 'PATCH',
+          body: { label: newLabel },
+        });
+        toast('Resume label updated.');
+        await show('profile');
+      } catch (err) {
+        btn.disabled = false;
+        if (errEl) errEl.textContent = err.message;
+        else toast(err.message, 'bad');
+      }
+    };
+  }
+
+  // Set as Default
+  for (const btn of el.querySelectorAll('[data-set-default-id]')) {
+    btn.onclick = async () => {
+      const id = btn.dataset.setDefaultId;
+      btn.disabled = true;
+      try {
+        await api(`/api/profile/resumes/${id}/default`, { method: 'PATCH' });
+        toast('Default resume updated.');
+        await show('profile');
+      } catch (err) {
+        btn.disabled = false;
+        toast(err.message, 'bad');
+      }
+    };
+  }
+
+  // Delete resume
+  for (const btn of el.querySelectorAll('[data-delete-id]')) {
+    btn.onclick = async () => {
+      const id = btn.dataset.deleteId;
+      if (!confirm('Delete this resume from your library? Applications you already submitted will keep their snapshots.')) return;
+      btn.disabled = true;
+      try {
+        await api(`/api/profile/resumes/${id}`, { method: 'DELETE' });
+        toast('Resume deleted.');
+        await show('profile');
+      } catch (err) {
+        btn.disabled = false;
+        toast(err.message, 'bad');
+      }
+    };
+  }
 }
