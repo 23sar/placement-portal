@@ -480,6 +480,59 @@ async function main() {
 
     console.log('  ✅ 14. PASS: Non-existent IDs return HTTP 404 and malformed IDs return HTTP 400.');
 
+    // -------------------------------------------------------------------------
+    // Scenario 15: Frontend-compatible /api/profile/details endpoint
+    // -------------------------------------------------------------------------
+    const detailsRes = await request('/api/profile/details', { token: alice.data.token });
+    assert(detailsRes.status === 200, `Expected 200 for /api/profile/details, got ${detailsRes.status}`);
+    assert(detailsRes.data.details && typeof detailsRes.data.details === 'object', 'Missing details object in response');
+    assert(Array.isArray(detailsRes.data.details.skills), 'details.skills must be an array');
+    assert(Array.isArray(detailsRes.data.details.projects), 'details.projects must be an array');
+    assert(Array.isArray(detailsRes.data.details.internships), 'details.internships must be an array');
+    assert(Array.isArray(detailsRes.data.details.achievements), 'details.achievements must be an array');
+    assert(Array.isArray(detailsRes.data.skills), 'top-level skills must be an array');
+
+    // Section CRUD through /api/profile/details/:section
+    const secAdd = await request('/api/profile/details/skills', {
+      method: 'POST',
+      token: alice.data.token,
+      body: { skill_name: 'GraphQL', proficiency: 'intermediate' },
+    });
+    assert(secAdd.status === 201, `Expected 201 for POST /api/profile/details/skills, got ${secAdd.status}`);
+    const secSkillId = secAdd.data.skill.id;
+
+    const secUpdate = await request(`/api/profile/details/skills/${secSkillId}`, {
+      method: 'PATCH',
+      token: alice.data.token,
+      body: { proficiency: 'expert' },
+    });
+    assert(secUpdate.status === 200, `Expected 200 for PATCH /api/profile/details/skills/:id, got ${secUpdate.status}`);
+    assert(secUpdate.data.skill.proficiency === 'expert', 'Expected updated proficiency to be expert');
+
+    const secList = await request('/api/profile/details/skills', { token: alice.data.token });
+    assert(secList.status === 200, `Expected 200 for GET /api/profile/details/skills, got ${secList.status}`);
+    assert(secList.data.skills.some(s => s.id === secSkillId), 'Newly added skill must be present in section list');
+
+    const secDelete = await request(`/api/profile/details/skills/${secSkillId}`, {
+      method: 'DELETE',
+      token: alice.data.token,
+    });
+    assert(secDelete.status === 200, `Expected 200 for DELETE /api/profile/details/skills/:id, got ${secDelete.status}`);
+
+    // Invalid section returns 404
+    const badSec = await request('/api/profile/details/invalid_section', { token: alice.data.token });
+    assert(badSec.status === 404, `Expected 404 for invalid section, got ${badSec.status}`);
+
+    // Unauthenticated access rejected
+    const unauthDetails = await request('/api/profile/details');
+    assert(unauthDetails.status === 401, `Expected 401 for unauthenticated /details, got ${unauthDetails.status}`);
+
+    // Non-student access forbidden
+    const companyDetails = await request('/api/profile/details', { token: company.data.token });
+    assert(companyDetails.status === 403, `Expected 403 for company access to /details, got ${companyDetails.status}`);
+
+    console.log('  ✅ 15. PASS: Frontend-compatible /api/profile/details and /details/:section endpoints verified.');
+
     console.log('\n===============================================================');
     console.log('  ✨ ALL STEP 8.2 PROFILE DETAILS API TESTS PASSED!             ');
     console.log('===============================================================\n');
@@ -489,16 +542,49 @@ async function main() {
     console.error(err);
     process.exitCode = 1;
   } finally {
-    if (server) server.close();
     try {
-      console.log(`[Cleanup] Dropping isolated test database '${TEST_DB}'...`);
-      await adminConn.query(`DROP DATABASE IF EXISTS \`${TEST_DB}\``);
-      console.log('[Cleanup] Test database dropped cleanly.\n');
+      if (server) {
+        if (typeof server.closeIdleConnections === 'function') {
+          server.closeIdleConnections();
+        }
+        if (typeof server.closeAllConnections === 'function') {
+          server.closeAllConnections();
+        }
+        await new Promise((resolve) => server.close(resolve));
+      }
     } catch (e) {
-      console.error('[Cleanup Error]', e.message);
+      console.error('[Cleanup Error] Server shutdown failed:', e.message);
+    } finally {
+      try {
+        if (pool) {
+          await new Promise((resolve) => pool.end(resolve));
+        }
+      } catch (e) {
+        console.error('[Cleanup Error] Pool close failed:', e.message);
+      } finally {
+        try {
+          if (adminConn) {
+            console.log(`[Cleanup] Dropping isolated test database '${TEST_DB}'...`);
+            await adminConn.query(`DROP DATABASE IF EXISTS \`${TEST_DB}\``);
+            console.log('[Cleanup] Test database dropped cleanly.\n');
+          }
+        } catch (e) {
+          console.error('[Cleanup Error] Dropping test database failed:', e.message);
+        } finally {
+          try {
+            if (adminConn) {
+              await adminConn.end();
+            }
+          } catch (e) {
+            console.error('[Cleanup Error] Closing admin connection failed:', e.message);
+          }
+        }
+      }
     }
-    await adminConn.end();
   }
 }
 
-main();
+main().catch((err) => {
+  console.error('\n❌ Fatal error in test runner:', err);
+  process.exitCode = 1;
+});

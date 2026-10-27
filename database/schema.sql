@@ -64,87 +64,6 @@ CREATE TABLE IF NOT EXISTS student_profiles (
   INDEX idx_student_profiles_department_year (department, graduation_year)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- student_skills --------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS student_skills (
-  id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  user_id     INT UNSIGNED NOT NULL,
-  skill_name  VARCHAR(100) NOT NULL,
-  proficiency ENUM('beginner', 'intermediate', 'advanced', 'expert') NULL,
-  created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-              ON UPDATE CURRENT_TIMESTAMP,
-
-  CONSTRAINT uq_student_skill UNIQUE (user_id, skill_name),
-
-  CONSTRAINT fk_student_skills_user
-    FOREIGN KEY (user_id) REFERENCES users(id)
-    ON DELETE CASCADE ON UPDATE CASCADE,
-
-  INDEX idx_student_skills_user (user_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- student_projects ------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS student_projects (
-  id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  user_id      INT UNSIGNED NOT NULL,
-  title        VARCHAR(150) NOT NULL,
-  description  TEXT NOT NULL,
-  technologies VARCHAR(255) NULL,
-  project_url  VARCHAR(255) NULL,
-  start_date   DATE NULL,
-  end_date     DATE NULL,
-  created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-               ON UPDATE CURRENT_TIMESTAMP,
-
-  CONSTRAINT fk_student_projects_user
-    FOREIGN KEY (user_id) REFERENCES users(id)
-    ON DELETE CASCADE ON UPDATE CASCADE,
-
-  INDEX idx_student_projects_user (user_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- student_internships ---------------------------------------------------------
-CREATE TABLE IF NOT EXISTS student_internships (
-  id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  user_id        INT UNSIGNED NOT NULL,
-  organization   VARCHAR(150) NOT NULL,
-  role           VARCHAR(100) NOT NULL,
-  description    TEXT NULL,
-  start_date     DATE NULL,
-  end_date       DATE NULL,
-  experience_url VARCHAR(255) NULL,
-  created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-                 ON UPDATE CURRENT_TIMESTAMP,
-
-  CONSTRAINT fk_student_internships_user
-    FOREIGN KEY (user_id) REFERENCES users(id)
-    ON DELETE CASCADE ON UPDATE CASCADE,
-
-  INDEX idx_student_internships_user (user_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- student_achievements --------------------------------------------------------
-CREATE TABLE IF NOT EXISTS student_achievements (
-  id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  user_id        INT UNSIGNED NOT NULL,
-  title          VARCHAR(150) NOT NULL,
-  issuer         VARCHAR(150) NULL,
-  description    TEXT NULL,
-  achieved_on    DATE NULL,
-  credential_url VARCHAR(255) NULL,
-  created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-                 ON UPDATE CURRENT_TIMESTAMP,
-
-  CONSTRAINT fk_student_achievements_user
-    FOREIGN KEY (user_id) REFERENCES users(id)
-    ON DELETE CASCADE ON UPDATE CASCADE,
-
-  INDEX idx_student_achievements_user (user_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 -- jobs ------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS jobs (
   id                      INT UNSIGNED   AUTO_INCREMENT PRIMARY KEY,
@@ -216,4 +135,83 @@ CREATE TABLE IF NOT EXISTS applications (
 
   INDEX idx_app_student (student_id),
   INDEX idx_app_job     (job_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- student_skills --------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS student_skills (
+  id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id     INT UNSIGNED NOT NULL,
+  skill_name  VARCHAR(100) NOT NULL,
+  proficiency ENUM('beginner', 'intermediate', 'advanced', 'expert') NULL,
+  created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT uq_student_skill UNIQUE (user_id, skill_name),
+  CONSTRAINT fk_student_skills_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  INDEX idx_student_skills_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- student_projects ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS student_projects (
+  id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id      INT UNSIGNED NOT NULL,
+  title        VARCHAR(150) NOT NULL,
+  description  TEXT NOT NULL,
+  technologies VARCHAR(255) NULL,
+  project_url  VARCHAR(255) NULL,
+  start_date   DATE NULL,
+  end_date     DATE NULL,
+  created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_student_projects_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  INDEX idx_student_projects_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- student_internships ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS student_internships (
+  id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id        INT UNSIGNED NOT NULL,
+  organization   VARCHAR(150) NOT NULL,
+  role           VARCHAR(100) NOT NULL,
+  description    TEXT NULL,
+  start_date     DATE NULL,
+  end_date       DATE NULL,
+  experience_url VARCHAR(255) NULL,
+  created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_student_internships_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  INDEX idx_student_internships_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- student_achievements --------------------------------------------------------
+CREATE TABLE IF NOT EXISTS student_achievements (
+  id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id        INT UNSIGNED NOT NULL,
+  title          VARCHAR(150) NOT NULL,
+  issuer         VARCHAR(150) NULL,
+  description    TEXT NULL,
+  achieved_on    DATE NULL,
+  credential_url VARCHAR(255) NULL,
+  created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_student_achievements_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  INDEX idx_student_achievements_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- student_resumes -------------------------------------------------------------
+-- Metadata only: PDF bytes live in private backend storage, never in frontend.
+CREATE TABLE IF NOT EXISTS student_resumes (
+  id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id       INT UNSIGNED NOT NULL,
+  original_name VARCHAR(255) NOT NULL,
+  storage_key   VARCHAR(64) NOT NULL,
+  mime_type     VARCHAR(100) NOT NULL DEFAULT 'application/pdf',
+  file_size     INT UNSIGNED NOT NULL,
+  sha256        CHAR(64) NOT NULL,
+  created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT uq_student_resumes_user UNIQUE (user_id),
+  CONSTRAINT fk_student_resumes_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+  INDEX idx_student_resumes_updated (updated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -792,6 +792,7 @@ const views = isAdmin ? {
 } : {
   jobs:     ['Browse Jobs', viewBrowse],
   apps:     ['My Applications', viewApps],
+  profile:  ['My Profile', viewStudentProfile],
 };
 
 async function show(v) {

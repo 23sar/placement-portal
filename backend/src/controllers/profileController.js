@@ -808,3 +808,65 @@ exports.deleteAchievement = async (req, res) => {
     return res.status(500).json({ error: 'Failed to delete achievement.' });
   }
 };
+
+/* =============================================================================
+ * 5. Aggregated Profile Details Endpoint (for frontend /api/profile/details)
+ * ============================================================================= */
+
+exports.getProfileDetails = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const [skills] = await db.promise().query(
+      'SELECT id, user_id, skill_name, proficiency, created_at, updated_at FROM student_skills WHERE user_id = ? ORDER BY id ASC',
+      [userId]
+    );
+    const [projects] = await db.promise().query(
+      `SELECT id, user_id, title, description, technologies, project_url,
+              DATE_FORMAT(start_date, '%Y-%m-%d') AS start_date,
+              DATE_FORMAT(end_date, '%Y-%m-%d') AS end_date,
+              created_at, updated_at
+       FROM student_projects
+       WHERE user_id = ?
+       ORDER BY start_date DESC, id DESC`,
+      [userId]
+    );
+    const [internships] = await db.promise().query(
+      `SELECT id, user_id, organization, role, description,
+              DATE_FORMAT(start_date, '%Y-%m-%d') AS start_date,
+              DATE_FORMAT(end_date, '%Y-%m-%d') AS end_date,
+              experience_url, created_at, updated_at
+       FROM student_internships
+       WHERE user_id = ?
+       ORDER BY start_date DESC, id DESC`,
+      [userId]
+    );
+    const [achievements] = await db.promise().query(
+      `SELECT id, user_id, title, issuer, description,
+              DATE_FORMAT(achieved_on, '%Y-%m-%d') AS achieved_on,
+              credential_url, created_at, updated_at
+       FROM student_achievements
+       WHERE user_id = ?
+       ORDER BY achieved_on DESC, id DESC`,
+      [userId]
+    );
+
+    const details = {
+      skills,
+      projects,
+      internships,
+      achievements,
+    };
+
+    return res.status(200).json({
+      details,
+      sections: details,
+      skills,
+      projects,
+      internships,
+      achievements,
+    });
+  } catch (err) {
+    console.error('[getProfileDetails] DB error:', err.message);
+    return res.status(500).json({ error: 'Failed to load profile details.' });
+  }
+};

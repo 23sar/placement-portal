@@ -12,7 +12,9 @@
     "test:step6": "node tests/step6_backend.test.js",
     "test:step7": "node tests/step7_backend.test.js",
     "test:step8-profile": "node tests/step8_profile_api.test.js",
-    "test:step8-details": "node tests/step8_profile_details.test.js"
+    "test:step8-resume": "node tests/step8_resume_api.test.js",
+    "test:step8-details": "node tests/step8_profile_details.test.js",
+    "test:step8": "npm run test:step8-profile && npm run test:step8-details && npm run test:step8-resume"
   },
   "keywords": [
     "placement",

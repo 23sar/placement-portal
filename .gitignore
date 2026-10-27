@@ -20,3 +20,5 @@ yarn-error.log*
 FUNCTIONAL_TEST_REPORT.md
 PROJECT_AUDIT_REPORT.md
 *REPORT.md
+# Private resume binaries (never commit student documents)
+backend/storage/resumes/

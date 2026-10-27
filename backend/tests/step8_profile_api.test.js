@@ -172,23 +172,51 @@ async function main() {
     failed = true;
     console.error('\n  STEP 8.1 PROFILE API SUITE FAILED:', err.stack || err.message);
   } finally {
-    if (server) await new Promise(resolve => server.close(resolve));
-    if (pool) {
-      try { await pool.promise().end(); } catch (err) { console.error('[Cleanup] Pool close warning:', err.message); }
-    }
     try {
-      await adminConn.query(`DROP DATABASE IF EXISTS \`${TEST_DB}\``);
-      console.log(`[Cleanup] Isolated database '${TEST_DB}' dropped.`);
-    } catch (err) {
-      failed = true;
-      console.error('[Cleanup] Could not drop isolated test database:', err.message);
+      if (server) {
+        if (typeof server.closeIdleConnections === 'function') {
+          server.closeIdleConnections();
+        }
+        if (typeof server.closeAllConnections === 'function') {
+          server.closeAllConnections();
+        }
+        await new Promise((resolve) => server.close(resolve));
+      }
+    } catch (e) {
+      console.error('[Cleanup Error] Server shutdown failed:', e.message);
+    } finally {
+      try {
+        if (pool) {
+          await new Promise((resolve) => pool.end(resolve));
+        }
+      } catch (e) {
+        console.error('[Cleanup Error] Pool close failed:', e.message);
+      } finally {
+        try {
+          if (adminConn) {
+            console.log(`[Cleanup] Dropping isolated test database '${TEST_DB}'...`);
+            await adminConn.query(`DROP DATABASE IF EXISTS \`${TEST_DB}\``);
+            console.log(`[Cleanup] Isolated database '${TEST_DB}' dropped.`);
+          }
+        } catch (e) {
+          failed = true;
+          console.error('[Cleanup Error] Dropping test database failed:', e.message);
+        } finally {
+          try {
+            if (adminConn) {
+              await adminConn.end();
+            }
+          } catch (e) {
+            console.error('[Cleanup Error] Closing admin connection failed:', e.message);
+          }
+        }
+      }
     }
-    await adminConn.end();
   }
   if (failed) process.exitCode = 1;
 }
 
 main().catch(err => {
-  console.error(err.stack || err.message);
+  console.error('\n❌ Fatal error in test runner:', err.stack || err.message);
   process.exitCode = 1;
 });
