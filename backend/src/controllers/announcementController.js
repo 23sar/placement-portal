@@ -175,8 +175,37 @@ exports.getAnnouncements = async (req, res) => {
       `;
       const [rows] = await db.promise().query(sql);
       return res.status(200).json(rows);
+    } else if (user.role === 'student') {
+      // Student feed: approved only with per-student read tracking
+      const sql = `
+        SELECT
+          a.id,
+          a.title,
+          a.content,
+          a.category,
+          a.posting_source,
+          a.approval_status,
+          a.published_at,
+          a.created_at,
+          creator.name AS creator_name,
+          company.name AS company_name,
+          (ar.id IS NOT NULL) AS is_read,
+          ar.read_at
+        FROM announcements a
+        LEFT JOIN users AS creator ON a.created_by = creator.id
+        LEFT JOIN users AS company ON a.company_id = company.id
+        LEFT JOIN announcement_reads AS ar ON a.id = ar.announcement_id AND ar.user_id = ?
+        WHERE a.approval_status = 'approved'
+        ORDER BY a.published_at DESC, a.id DESC
+      `;
+      const [rows] = await db.promise().query(sql, [user.id]);
+      const mapped = rows.map(r => ({
+        ...r,
+        is_read: Boolean(r.is_read),
+      }));
+      return res.status(200).json(mapped);
     } else {
-      // General & student feed: approved only
+      // General feed (e.g. company browsing public feed): approved only without student-private read state
       const sql = `
         SELECT
           a.id,
@@ -515,5 +544,102 @@ exports.deleteAnnouncement = async (req, res) => {
   } catch (err) {
     console.error('[deleteAnnouncement] DB error:', err.message);
     return res.status(500).json({ error: 'Failed to delete announcement.' });
+  }
+};
+
+/**
+ * getUnreadAnnouncementCount — Return the number of unread approved announcements for the student.
+ * Excludes pending, rejected, and non-approved announcements.
+ */
+exports.getUnreadAnnouncementCount = async (req, res) => {
+  const user = req.user;
+  if (user.role !== 'student') {
+    return res.status(403).json({ error: 'Access forbidden. Student role required.' });
+  }
+
+  try {
+    const sql = `
+      SELECT COUNT(*) AS unread_count
+      FROM announcements a
+      LEFT JOIN announcement_reads ar ON a.id = ar.announcement_id AND ar.user_id = ?
+      WHERE a.approval_status = 'approved'
+        AND ar.id IS NULL
+    `;
+    const [rows] = await db.promise().query(sql, [user.id]);
+    const count = rows && rows[0] ? Number(rows[0].unread_count || 0) : 0;
+    return res.status(200).json({ unread_count: count });
+  } catch (err) {
+    console.error('[getUnreadAnnouncementCount] DB error:', err.message);
+    return res.status(500).json({ error: 'Failed to fetch unread announcement count.' });
+  }
+};
+
+/**
+ * markAnnouncementAsRead — Mark a single published announcement as read for the student.
+ * Idempotent. Requires announcement to exist and be approved.
+ */
+exports.markAnnouncementAsRead = async (req, res) => {
+  const user = req.user;
+  if (user.role !== 'student') {
+    return res.status(403).json({ error: 'Access forbidden. Student role required.' });
+  }
+
+  const announcementId = parseId(req.params.id);
+  if (!announcementId) {
+    return res.status(400).json({ error: 'Invalid announcement ID provided.' });
+  }
+
+  try {
+    // Validate announcement exists and is approved
+    const [rows] = await db.promise().query(
+      'SELECT id, approval_status FROM announcements WHERE id = ?',
+      [announcementId]
+    );
+
+    if (!rows || rows.length === 0 || rows[0].approval_status !== 'approved') {
+      return res.status(404).json({ error: 'Announcement not found or not published.' });
+    }
+
+    // Insert read record idempotently
+    await db.promise().query(
+      `INSERT INTO announcement_reads (user_id, announcement_id, read_at)
+       VALUES (?, ?, NOW())
+       ON DUPLICATE KEY UPDATE read_at = read_at`,
+      [user.id, announcementId]
+    );
+
+    return res.status(200).json({
+      message: 'Announcement marked as read.',
+      announcement_id: announcementId,
+      is_read: true,
+    });
+  } catch (err) {
+    console.error('[markAnnouncementAsRead] DB error:', err.message);
+    return res.status(500).json({ error: 'Failed to mark announcement as read.' });
+  }
+};
+
+/**
+ * markAllAnnouncementsAsRead — Mark all currently published announcements as read for the student.
+ */
+exports.markAllAnnouncementsAsRead = async (req, res) => {
+  const user = req.user;
+  if (user.role !== 'student') {
+    return res.status(403).json({ error: 'Access forbidden. Student role required.' });
+  }
+
+  try {
+    await db.promise().query(
+      `INSERT IGNORE INTO announcement_reads (user_id, announcement_id, read_at)
+       SELECT ?, id, NOW()
+       FROM announcements
+       WHERE approval_status = 'approved'`,
+      [user.id]
+    );
+
+    return res.status(200).json({ message: 'All announcements marked as read.' });
+  } catch (err) {
+    console.error('[markAllAnnouncementsAsRead] DB error:', err.message);
+    return res.status(500).json({ error: 'Failed to mark all announcements as read.' });
   }
 };

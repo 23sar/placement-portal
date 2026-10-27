@@ -15,7 +15,8 @@
     "test:step8-resume": "node tests/step8_resume_api.test.js",
     "test:step8-details": "node tests/step8_profile_details.test.js",
     "test:step8-announcements": "node tests/step8_announcements_api.test.js",
-    "test:step8": "npm run test:step8-profile && npm run test:step8-details && npm run test:step8-resume && npm run test:step8-announcements"
+    "test:step8-read-tracking": "node tests/step8_announcements_read_tracking.test.js",
+    "test:step8": "npm run test:step8-profile && npm run test:step8-details && npm run test:step8-resume && npm run test:step8-announcements && npm run test:step8-read-tracking"
   },
   "keywords": [
     "placement",

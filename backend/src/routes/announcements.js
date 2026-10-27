@@ -8,6 +8,9 @@ const {
   reviewAnnouncementApproval,
   getAnnouncementById,
   deleteAnnouncement,
+  getUnreadAnnouncementCount,
+  markAnnouncementAsRead,
+  markAllAnnouncementsAsRead,
 } = require('../controllers/announcementController');
 
 const router = Router();
@@ -16,6 +19,9 @@ const router = Router();
 router.get('/',                  verifyToken,                                getAnnouncements);
 router.get('/pending',           verifyToken, checkRole('admin'),            getPendingAnnouncements);
 router.get('/my',                verifyToken, checkRole('company'),          getMyAnnouncements);
+router.get('/unread-count',      verifyToken, checkRole('student'),          getUnreadAnnouncementCount);
+router.post('/read-all',         verifyToken, checkRole('student'),          markAllAnnouncementsAsRead);
+router.post('/:id/read',         verifyToken, checkRole('student'),          markAnnouncementAsRead);
 router.post('/',                 verifyToken, checkRole('company', 'admin'), createAnnouncement);
 router.post('/create',           verifyToken, checkRole('company', 'admin'), createAnnouncement);
 router.patch('/:id/approval',    verifyToken, checkRole('admin'),            reviewAnnouncementApproval);
